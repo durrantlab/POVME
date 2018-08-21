@@ -814,23 +814,47 @@ class BoxOfPoints():
         
         all_pockets = []
         
+        # self.points is an array of 3D points
+
+        # self.dist_matrix is a distance matrixs. self.dist_matrix[i,j] is
+        # distance between points i and j. But it only contains distances if
+        # the points are close (neighbors). Otherwise, 0.
+
+        # Keep going until there are no more points that need to be assigned
+        # to a pocket.
         while len(self.points) != 0:
-        
             pocket_indexes = numpy.array([0])
-            
             num_pts_in_pocket = 0
-            
+
+            # Keep looping into no new unique pockets are added.
             while num_pts_in_pocket != len(pocket_indexes):
-                
                 num_pts_in_pocket = len(pocket_indexes)
                 
-                # get all the adjacent points
-                pocket_indexes = numpy.hstack((pocket_indexes,numpy.array(numpy.nonzero(self.dist_matrix[pocket_indexes, :])[1])[0]))
+                # Get all the adjacent points
+                indecies_of_neighbors = numpy.nonzero(
+                    self.dist_matrix[pocket_indexes, :]
+                )[1]
+
+                # Get one of them. Not sure why this was previously in the code...
+                # if len(indecies_of_neighbors) > 0:
+                    # In case a point has no neighbors, you need this conditional.
+                    # one_index_of_neighbor = numpy.array(indecies_of_neighbors)[0]
+
+                # Add that one index to the growing list.
+                pocket_indexes = numpy.hstack((
+                    pocket_indexes,
+                    indecies_of_neighbors
+                    # one_index_of_neighbor  # Not sure why it used to be this.
+                ))
+
+                # Make sure only unique indecies ones are retained.
                 pocket_indexes = numpy.unique(pocket_indexes)
             
+            # Save these points (in the pocket) to a list of pockets.
             pocket = self.points[pocket_indexes,:]
             all_pockets.append(pocket)
             
+            # Remove those points from the list of points before trying again.
             self.__delete_limited_points(pocket_indexes)
         
         # sort the pockets by size
