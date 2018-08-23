@@ -1,4 +1,4 @@
-# POVME 2.0.1 is released under the GNU General Public License (see http://www.gnu.org/licenses/gpl.html).
+# POVME 2.0.2 is released under the GNU General Public License (see http://www.gnu.org/licenses/gpl.html).
 # If you have any questions, comments, or suggestions, please don't hesitate to contact me,
 # Jacob Durrant, at jdurrant [at] ucsd [dot] edu.
 #
@@ -25,7 +25,7 @@ from scipy.spatial.distance import cdist
 from scipy.spatial.distance import pdist
 from scipy.spatial.distance import squareform
 
-version = "2.0.1"
+version = "2.0.2"
 
 def log(astr, parameters):
     '''Output POVME statements, either to the screen or to a file
@@ -512,7 +512,7 @@ def dx_freq(freq_mat, parameters):
 
     '''
     
-    header_template = """# Data from POVME 2.0.1
+    header_template = """# Data from POVME 2.0.2
 # 
 # FREQUENCY (unitless)
 # 
