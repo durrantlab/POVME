@@ -91,7 +91,9 @@ user-specified inclusion region with points and then removes any points also
 contained in the optional exclusion region. You need to specify the distance
 separating each of these equidistant points:
 
-`GridSpacing 1.0`
+```
+GridSpacing 1.0
+```
  
 6\. How to choose the inclusion and exclusion regions
 -----------------------------------------------------
@@ -103,7 +105,9 @@ receptor using a program like VMD, and then iteratively add new inclusion and
 exclusion regions as required. You can optionally save the point field to a
 file called point_field.pdb for visualization:
 
-`SavePoints true`
+```
+SavePoints true
+```
  
 7\. Specify the location of the receptor PDB file to analyze
 ------------------------------------------------------------
@@ -112,7 +116,7 @@ Once you've properly generated a pocket-encompassing point field, you're ready
 to use that point field to calculate pocket volumes. Here's how to specify the
 location of the PDB receptor file that has the pocket you wish to analyze:
 
-`PDBFileName my_receptor.pdb`
+```PDBFileName my_receptor.pdb```
 
 Note that this file can be a trajectory containing multiple frames.
  
@@ -125,7 +129,7 @@ only those points that are likely to be located within the binding pocket
 itself. To specify how close the points can come to the van der Waal's surface
 of the receptor before being removed:
 
-`DistanceCutoff 1.09`
+```DistanceCutoff 1.09```
 
 Note that if the receptor PDB file contains multiple frames, this will be done
 on a frame-by-frame basis.
@@ -141,7 +145,7 @@ fall outside the convex hull are removed. This feature is particularly useful
 when the user defines an inclusion region that protrudes into the surrounding
 solvent-occupying space. To activate the convex-hull feature:
 
-`ConvexHullExclusion true`
+```ConvexHullExclusion true```
  
 10\. Remove points that are not contiguous with the primary pocket
 ------------------------------------------------------------------
@@ -160,7 +164,9 @@ ContiguousPocketSeedBox 50.0 50.0 50.0 10.0 10.0 10.0
 Two pocket volumes are considered "contiguous" if they share at least X
 neighboring points in common, where X is defined by:
 
-`ContiguousPointsCriteria 3`
+```
+ContiguousPointsCriteria 3
+```
 
 Note that points that are "kitty-corner" from each other count as neighbors.
  
