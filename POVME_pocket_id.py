@@ -1,8 +1,8 @@
-# POVME Pocket ID 1.0 is released under the GNU General Public License 
-# (see http://www.gnu.org/licenses/gpl.html).
+# POVME Pocket ID 1.0 is released under the GNU General Public License (see
+# http://www.gnu.org/licenses/gpl.html).
 
-# If you have any questions, comments, or suggestions, please don't hesitate to contact me,
-# Jacob Durrant, at jdurrant [at] ucsd [dot] edu.
+# If you have any questions, comments, or suggestions, please don't hesitate
+# to contact me, Jacob Durrant, at durrantj [at] pitt [dot] edu.
 
 import sys
 import numpy
@@ -15,15 +15,16 @@ from numpy.lib.recfunctions import append_fields
 import multiprocessing
 import warnings
 
-# POVME Pocket ID 1.0 is a program for identifying protein pockets and generating
-# appropriate pocket-encompassing inclusion spheres. These spheres, modified as required,
-# can then be used as POVME input.
+# POVME Pocket ID 1.0 is a program for identifying protein pockets and
+# generating appropriate pocket-encompassing inclusion spheres. These spheres,
+# modified as required, can then be used as POVME input.
 
 # Supress errors
 numpy.seterr(all='ignore')
 warnings.simplefilter("ignore") # no "One of the clusters is empty." warnings
 
-# Some classes are required to support the loading and manipulation of 3D molecular information
+# Some classes are required to support the loading and manipulation of 3D
+# molecular information
 
 class Information():
     """A class for storing and accessing information about the elements of a Molecule object"""
@@ -289,7 +290,7 @@ class Molecule:
         
         names = list(narray.dtype.names) # now remove the coordinates from the atom_information object to save memory
         for f in field_names: names.remove(f)
-        return narray[names]
+        return narray[names].copy()
 
 # Some classes are required for calculating convex hulls
 

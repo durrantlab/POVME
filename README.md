@@ -1,4 +1,4 @@
-POVME 2.0.2
+POVME 2.0.3
 ===========
 
 0\. License: GNU General Public License version 3

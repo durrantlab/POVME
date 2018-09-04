@@ -1,10 +1,16 @@
-# POVME 2.0.2 is released under the GNU General Public License (see http://www.gnu.org/licenses/gpl.html).
-# If you have any questions, comments, or suggestions, please don't hesitate to contact me,
-# Jacob Durrant, at jdurrant [at] ucsd [dot] edu.
+# POVME 2.0.3 is released under the GNU General Public License (see
+# http://www.gnu.org/licenses/gpl.html). If you have any questions, comments,
+# or suggestions, please don't hesitate to contact me, Jacob Durrant, at
+# durrantj [at] pitt [dot] edu.
 #
-# If you use POVME in your work, please cite Durrant, J. D., C. A. de Oliveira, et al.
-#    (2011). "POVME: An algorithm for measuring binding-pocket volumes." J Mol Graph
-#    Model 29(5): 773-776.
+# If you use POVME in your work, please cite: 
+#
+#    Durrant, J. D., C. A. de Oliveira, et al. (2011). "POVME: An algorithm
+#    for measuring binding-pocket volumes." J Mol Graph Model 29(5): 773-776.
+#
+#    Durrant, J. D., L. Votapka, et al. (2014). "Povme 2.0: An Enhanced Tool
+#    for Determining Pocket Shape and Volume Characteristics." J Chem Theory
+#    Comput 10.11: 5047-56. 
 
 import math
 import sys
@@ -25,7 +31,7 @@ from scipy.spatial.distance import cdist
 from scipy.spatial.distance import pdist
 from scipy.spatial.distance import squareform
 
-version = "2.0.2"
+version = "2.0.3"
 
 def log(astr, parameters):
     '''Output POVME statements, either to the screen or to a file
@@ -512,7 +518,7 @@ def dx_freq(freq_mat, parameters):
 
     '''
     
-    header_template = """# Data from POVME 2.0.2
+    header_template = """# Data from POVME 2.0.3
 # 
 # FREQUENCY (unitless)
 # 
@@ -728,7 +734,7 @@ class MultithreadingCalcVolumeTask(MultithreadingTaskGeneral):
         if parameters['SaveIndividualPocketVolumes'] == True:
             frame_text = ""
             frame_text = frame_text + "REMARK Frame " + str(frame_indx) + "\n"
-            frame_text = frame_text + "REMARK Volume = " + repr(volume) + " Cubic Angtroms\n"
+            frame_text = frame_text + "REMARK Volume = " + repr(volume) + " Cubic Angstroms\n"
             frame_text = frame_text + numpy_to_pdb(pts,'X')
 
             if parameters['OutputEqualNumPointsPerFrame'] == True:
@@ -1036,7 +1042,7 @@ class runit():
         int_parameters = ["NumFrames", "ContiguousPointsCriteria", "NumProcessors"]
         string_parameters = ["OutputFilenamePrefix", "PDBFileName", "LoadPointsFilename"]
         
-        print config.entities
+        # print config.entities
         
         for entity in config.entities:
             try:
