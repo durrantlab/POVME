@@ -1492,7 +1492,6 @@ class run_povme:
                 pass
 
             # Regions are handled separately for each parameter...
-            print(entity[0])
             if entity[0] == "POINTSINCLUSIONSPHERE":
                 Include = Region()
                 items = entity[1].split(" ")
