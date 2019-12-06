@@ -1,5 +1,5 @@
-POVME 2.0.3
-===========
+POVME 2.1
+=========
 
 0\. License: GNU General Public License version 3
 -------------------------------------------------
@@ -36,7 +36,7 @@ If you use POVME in your work, please cite:
 2. Durrant, J.D., L. Votapka, J. Sørensen, and R. E. Amaro (2014). "POVME 2.0:
    An Enhanced Tool for Determining Pocket Shape and Volume Characteristics."
    J. Chem. Theory Comput. 10(11):5047-5056.
- 
+
 2\. Align a PDB-formatted trajectory
 ------------------------------------
 
@@ -81,7 +81,7 @@ pocket. It is similarly constructed from spheres and boxes:
 PointsExclusionSphere -2.0 -2.0 -4.0 5.0
 PointsExclusionBox -5.0 -7.0 2.0 10.0 10.0 10.0
 ```
- 
+
 5\. Create a field of equidistant points
 ----------------------------------------
 
@@ -94,7 +94,7 @@ separating each of these equidistant points:
 ```
 GridSpacing 1.0
 ```
- 
+
 6\. How to choose the inclusion and exclusion regions
 -----------------------------------------------------
 
@@ -108,7 +108,7 @@ file called point_field.pdb for visualization:
 ```
 SavePoints true
 ```
- 
+
 7\. Specify the location of the receptor PDB file to analyze
 ------------------------------------------------------------
 
@@ -119,7 +119,7 @@ location of the PDB receptor file that has the pocket you wish to analyze:
 ```PDBFileName my_receptor.pdb```
 
 Note that this file can be a trajectory containing multiple frames.
- 
+
 8\. Remove points that are near receptor atoms
 ----------------------------------------------
 
@@ -146,7 +146,7 @@ when the user defines an inclusion region that protrudes into the surrounding
 solvent-occupying space. To activate the convex-hull feature:
 
 ```ConvexHullExclusion true```
- 
+
 10\. Remove points that are not contiguous with the primary pocket
 ------------------------------------------------------------------
 
@@ -169,7 +169,7 @@ ContiguousPointsCriteria 3
 ```
 
 Note that points that are "kitty-corner" from each other count as neighbors.
- 
+
 All pocket-occupying points within or contiguous to this region are retained,
 but isolated patches of points that are not directly connected are deleted.
 
@@ -226,8 +226,8 @@ OutputEqualNumPointsPerFrame  true                         # Some visualization 
 SaveTabbedVolumeFile          true                         # If true, POVME saves the calculated
                                                            # volumes to a file in a simple tabular
                                                            # format that can be easily pasted into
-                                                           # popular spreadsheet programs like 
-                                                           # Microsoft Excel. The file is named 
+                                                           # popular spreadsheet programs like
+                                                           # Microsoft Excel. The file is named
                                                            # {PREFIX}volumes.tabbed.txt
 
 SaveVolumetricDensityMap      true                         # If true, POVME saves a volumetric
@@ -236,7 +236,7 @@ SaveVolumetricDensityMap      true                         # If true, POVME save
                                                            # with each of the pocket-occupying
                                                            # points by calculating the fraction of
                                                            # all trajectory pocket volumes that
-                                                           # include the given point. The file is 
+                                                           # include the given point. The file is
                                                            # named {PREFIX}volumetric_density.dx.
 
 CompressOutput                true                         # If you're short on disk space, POVME
