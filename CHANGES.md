@@ -5,12 +5,13 @@ Changes
 ---
 
 1. Updated version to 2.1.
-2. Now Python 3 compatible.
-3. Fixed minor bug that assigned atoms with names like "HG21" to element "HG"
-   rather than "H". No longer supporting element "HG".
-4. Improved formatting (black) and docstrings.
-5. Moved GUI wrapper to new `depreciated/` folder. This feature is no longer
+2. Now Python3 compatible. Python2 no longer officially supported.
+3. Refactored code so that it can now be called as a library.
+4. Moved GUI wrapper to new `depreciated/` folder. This feature is no longer
    supported.
+5. Improved formatting (black) and docstrings.
+6. Fixed minor bug that assigned atoms with names like "HG21" to element "HG"
+   rather than "H". No longer supporting element "HG".
 
 2.0.3
 -----
