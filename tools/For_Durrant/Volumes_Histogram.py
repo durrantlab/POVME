@@ -21,7 +21,7 @@ for line in volumes:
 
 
 #Create a list of volume values, store in vol_list
-vol_list = vol_dic.values()
+vol_list = list(vol_dic.values())
 #Sets bin parameters for the histogram
 #bins = np.array([n for n in range(0, len(vol_list)#, 5)])
 

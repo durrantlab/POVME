@@ -1,6 +1,16 @@
 Changes
 =======
 
+2.1
+---
+
+1. Now Python 3 compatible.
+2. Fixed minor bug that assigned atoms with names like "HG21" to element "HG"
+   rather than "H". No longer supporting element "HG".
+3. Improved formatting (black) and docstrings.
+4. Moved GUI wrapper to new `depreciated/` folder. This feature is no longer
+   supported.
+
 2.0.3
 -----
 

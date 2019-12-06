@@ -19,9 +19,9 @@ for line in volumes:
 	vol_dic[a] = float(b)
 
 #Creates a list of the volumes from vol_dic
-vol_list = vol_dic.values()  
+vol_list = list(vol_dic.values())  
 #Creates a list of the frames from vol_dic
-frame_num = vol_dic.keys()   
+frame_num = list(vol_dic.keys())   
 #Creates scatterplot, x = frames, y = volumes
 plt.scatter(frame_num, vol_list, marker = '.', s = 50, c = 'orange')
 # X axis label
@@ -31,7 +31,7 @@ plt.ylabel('Binding Pocket Volume')
 # Plot Title
 plt.title('Binding Pocket Volume Over Time')
 #Sets parameters of X axis for viewing
-plt.xticks(range(-1, len(frame_num), (len(frame_num)/10)))
+plt.xticks(list(range(-1, len(frame_num), (len(frame_num)/10))))
 plt.xlim([- 1, len(frame_num)])
 # Shows plot
 plt.savefig('Scatterplot.png')

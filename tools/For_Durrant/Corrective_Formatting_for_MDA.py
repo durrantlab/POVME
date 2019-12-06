@@ -3,7 +3,7 @@ from sys import argv
 #Get VMD-annotated PDB from user through sys.argv
 script, pdb_file = argv
 
-print "This script will create a PDB /n with the correct formatting for MDA"
+print("This script will create a PDB /n with the correct formatting for MDA")
 #Creates a new Universe with user input
 u = MDAnalysis.Universe(pdb_file, topology_format = 'PDB')
 #Writes a new trajectory in the format MDAnalysis can work with

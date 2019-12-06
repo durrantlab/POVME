@@ -18,12 +18,12 @@ for line in volumes:
 
 #Finds maximum value in volumes and stores as max_val
 max_val = 0
-for val in vol_dic.values():
+for val in list(vol_dic.values()):
 	if val > max_val:
 		max_val = val
 
 #Finds the frame of the maximum value and stores as max_val_frame
-for frame, volume in vol_dic.items():
+for frame, volume in list(vol_dic.items()):
 	if volume == max_val:
 		max_val_frame = frame
 
@@ -32,15 +32,15 @@ min_val = min(vol_dic.values())
 
 #Finds frame of minimum volume and stores as min_val_frame
 
-for frame, volume in vol_dic.items():
+for frame, volume in list(vol_dic.items()):
 	if volume == min_val:
 		min_val_frame = frame
 		
 
-print """
+print("""
 The maximum pocket volume of this data set is %r, at frame %r,
 while the minimum pocket volume of this data set is %r, at frame %r.
- 		""" % (max_val, max_val_frame, min_val, min_val_frame)
+ 		""" % (max_val, max_val_frame, min_val, min_val_frame))
 	
 
 

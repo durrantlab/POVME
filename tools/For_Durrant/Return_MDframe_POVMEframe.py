@@ -5,7 +5,7 @@ from sys import argv
 script, pdb_file = argv
 
 #Get number of the POVME frame from User
-frame_num = raw_input("What is the frame number you want? ")
+frame_num = input("What is the frame number you want? ")
 frame_num_int = int(frame_num)
 frame_num_str = str(frame_num)
 
@@ -20,5 +20,5 @@ with mda.Writer("MD_frame_" + frame_num_str + ".pdb",
 				start = frame_num_int,
 				multiframe = False) as pdb:
 						pdb.write(u)
-print "Created new PDB file for specified frame, titled 'MD_frame_%r.pdb'" %frame_num
-print "Your POVME frame is titled 'POVME_frame_%r.pdb' " % frame_num
+print("Created new PDB file for specified frame, titled 'MD_frame_%r.pdb'" %frame_num)
+print("Your POVME frame is titled 'POVME_frame_%r.pdb' " % frame_num)
