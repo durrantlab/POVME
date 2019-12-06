@@ -18,10 +18,10 @@ You should have received a copy of the GNU General Public License along with
 this program. If not, see
 [https://www.gnu.org/licenses/](https://www.gnu.org/licenses/).
 
-1\. Download POVME 2.0
+1\. Download POVME 2.1
 ----------------------
 
-Begin by downloading POVME 2.0. An example input file is included with the
+Begin by downloading POVME 2.1. An example input file is included with the
 download (in the 'examples' directory). This input file is heavily commented
 and may be even more useful that the information provided on this website.
 

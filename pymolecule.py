@@ -20,8 +20,8 @@
 
     If you use pymolecule in your work, please cite [REFERENCE HERE]"""
 
-"""Note: This is a beta version of pymolecule 2.0. Not intended for distribution
-    independent of POVME 2.0!!!"""
+"""Note: This is a beta version of pymolecule. Not intended for distribution
+    independent of POVME 2.1!!!"""
 
 
 import os
@@ -37,7 +37,7 @@ import sys
 import pickle as pickle
 import shutil
 
-version = "2.0"
+version = "beta"
 
 if __name__ == "__main__":
     print("\npymolecule " + version + "\n")
