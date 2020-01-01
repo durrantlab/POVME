@@ -36,6 +36,7 @@ from scipy.spatial.distance import cdist
 from scipy.spatial.distance import pdist
 from scipy.spatial.distance import squareform
 
+
 def log(astr, parameters):
     """Output POVME statements, either to the screen or to a file.
 
@@ -810,37 +811,35 @@ class MultithreadingCalcVolumeTask(MultithreadingTaskGeneral):
         max_pts = numpy.max(pts, 0) + parameters["DistanceCutoff"] + 1
 
         # identify atoms that are so far away from points that they can be
-        # ignored
+        # ignored. First, x's too small.
         index_to_keep1 = numpy.nonzero(
             (pdb.information.coordinates[:, 0] > min_pts[0])
-        )[
-            0
-        ]  # x's too small
+        )[0]
+
+        # x's too large
         index_to_keep2 = numpy.nonzero(
             (pdb.information.coordinates[:, 0] < max_pts[0])
-        )[
-            0
-        ]  # x's too large
+        )[0]
+
+        # y's too small
         index_to_keep3 = numpy.nonzero(
             (pdb.information.coordinates[:, 1] > min_pts[1])
-        )[
-            0
-        ]  # y's too small
+        )[0]
+
+        # y's too large
         index_to_keep4 = numpy.nonzero(
             (pdb.information.coordinates[:, 1] < max_pts[1])
-        )[
-            0
-        ]  # y's too large
+        )[0]
+
+        # z's too small
         index_to_keep5 = numpy.nonzero(
             (pdb.information.coordinates[:, 2] > min_pts[2])
-        )[
-            0
-        ]  # z's too small
+        )[0]
+
+        # z's too large
         index_to_keep6 = numpy.nonzero(
             (pdb.information.coordinates[:, 2] < max_pts[2])
-        )[
-            0
-        ]  # z's too large
+        )[0]
 
         index_to_keep = numpy.intersect1d(
             index_to_keep1, index_to_keep2, assume_unique=True
@@ -1301,7 +1300,7 @@ class ConfigFile:
                 self.entities.append(line)
 
 
-class run_povme:
+class RunPOVME:
     """The main class to run POVME."""
 
     def reference(self, parameters, before=""):
@@ -1459,8 +1458,6 @@ class run_povme:
             "PDBFileName",
             "LoadPointsFilename",
         ]
-
-        # print config.entities
 
         for entity in config.entities:
             try:
@@ -1875,4 +1872,4 @@ class run_povme:
 
 
 if __name__ == "__main__":
-    dorun = run_povme(sys.argv)
+    dorun = RunPOVME(sys.argv)

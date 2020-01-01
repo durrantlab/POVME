@@ -15,4 +15,4 @@
 from povme import povme
 import sys
 
-povme.run_povme(sys.argv)
+povme.RunPOVME(sys.argv)
