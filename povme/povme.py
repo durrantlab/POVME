@@ -1252,16 +1252,16 @@ class ConfigFile:
 
     entities = []
 
-    def __init__(self, FileName):
+    def __init__(self, filename):
         """Generates a point field by filling the region with equally spaced
         points.
 
         Arguments:
-        FileName -- A string, the filename of the configuration file.
+        filename -- A string, the filename of the configuration file.
 
         """
 
-        f = open(FileName, "r")
+        f = open(filename, "r")
         lines = f.readlines()
         f.close()
 
@@ -1396,6 +1396,10 @@ class RunPOVME:
 
         start_time = time.time()
 
+        # First, check if running in test mode.
+        if "--test" in sys.argv:
+            print("Hi")
+
         # Load the configuration file
         if len(argv) == 1:
             print("\nPOVME " + __version__)
@@ -1403,7 +1407,7 @@ class RunPOVME:
                 "\nPlease specify the input file from the command line!\n\nExample: python POVME.py input_file.ini"
             )
             self.reference({})
-            print()
+            print("")
             sys.exit()
 
         config = ConfigFile(argv[1])

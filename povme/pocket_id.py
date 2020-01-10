@@ -1370,7 +1370,7 @@ def run_pocket_id(parameters):
 
     if params["filename"] == "":
         print("ERROR: Must specify the --filename parameter!")
-        print()
+        print("")
         sys.exit(0)
 
     for key in ["number_of_neighbors", "processors", "number_of_spheres"]:
@@ -1384,10 +1384,10 @@ def run_pocket_id(parameters):
         params[key] = float(params[key])
 
     print("Specified command-line arguments:")
-    print()
+    print("")
     for key in params:
         print("     --" + key + ": " + str(params[key]))
-    print()
+    print("")
 
     # Step 1: Load in the protein
 
@@ -1562,16 +1562,16 @@ def run_pocket_id(parameters):
                     cluster_pts, let_ids[cluster_num]
                 )
             except:
-                print()
+                print("")
                 printit(
                     "There was an error, but I don't think it was catastrophic. Could be that one of the pocket clusters was empty."
                 )
-                print()
+                print("")
 
         f.write(pts_string)
         f.close()
 
-    print()
+    print("")
     printit(
         "Done. See the pocket{n}.pdb files. Using a visualization program like VMD, identify which of these files includes the pocket you wish to measure. POVME Pocket ID has divided each pocket volume into "
         + str(params["number_of_spheres"])
@@ -1580,7 +1580,7 @@ def run_pocket_id(parameters):
     printit(
         "The POVME PointsInclusionSphere commands are located in the header of each pocket{n}.pdb file. A text editor can be used to copy and paste these commands into a POVME input file."
     )
-    print()
+    print("")
 
 
 if __name__ == "__main__":
