@@ -17,7 +17,6 @@ import sys
 import time
 import numpy
 from . import pymolecule
-import gzip
 import os
 import shutil
 import random
@@ -25,7 +24,7 @@ import multiprocessing
 import platform
 from functools import reduce
 from .__init__ import __version__
-
+from .common import openfile, gzopenfile, fix_filename
 
 try:
     from io import StringIO
@@ -52,7 +51,7 @@ def log(astr, parameters):
     # Save it to the output file as well.
     try:
         if parameters["CompressOutput"] == True:
-            f = gzip.open(parameters["OutputFilenamePrefix"] + "output.txt.gz", "ab")
+            f = gzopenfile(parameters["OutputFilenamePrefix"] + "output.txt.gz", "ab")
         else:
             f = open(parameters["OutputFilenamePrefix"] + "output.txt", "a")
 
@@ -737,11 +736,11 @@ component "data" value 3"""
     # 3. write the header and footer
     if parameters["SaveVolumetricDensityMap"] == True:
         if parameters["CompressOutput"] == True:
-            dx_file = gzip.open(
+            dx_file = gzopenfile(
                 parameters["OutputFilenamePrefix"] + "volumetric_density.dx.gz", "wb"
             )
         else:
-            dx_file = open(
+            dx_file = openfile(
                 parameters["OutputFilenamePrefix"] + "volumetric_density.dx", "w"
             )
 
@@ -1037,7 +1036,7 @@ class MultithreadingCalcVolumeTask(MultithreadingTaskGeneral):
             frame_text = frame_text + "END\n"
 
             if parameters["CompressOutput"] == True:
-                fl = gzip.open(
+                fl = gzopenfile(
                     parameters["OutputFilenamePrefix"]
                     + "frame_"
                     + str(frame_indx)
@@ -1045,7 +1044,7 @@ class MultithreadingCalcVolumeTask(MultithreadingTaskGeneral):
                     "wb",
                 )
             else:
-                fl = open(
+                fl = openfile(
                     parameters["OutputFilenamePrefix"]
                     + "frame_"
                     + str(frame_indx)
@@ -1261,7 +1260,7 @@ class ConfigFile:
 
         """
 
-        f = open(filename, "r")
+        f = openfile(filename, "r")
         lines = f.readlines()
         f.close()
 
@@ -1457,7 +1456,7 @@ class RunPOVME:
             "SavePocketVolumesTrajectory",
         ]
         int_parameters = ["NumFrames", "ContiguousPointsCriteria", "NumProcessors"]
-        string_parameters = [
+        filename_parameters = [
             "OutputFilenamePrefix",
             "PDBFileName",
             "LoadPointsFilename",
@@ -1487,8 +1486,10 @@ class RunPOVME:
                 pass
 
             try:
-                index = [p.upper() for p in string_parameters].index(entity[0])
-                parameters[string_parameters[index]] = entity[1].strip()
+                index = [p.upper() for p in filename_parameters].index(entity[0])
+                parameters[filename_parameters[index]] = fix_filename(
+                    entity[1].strip(), False
+                ).as_posix()  # so a string
             except:
                 pass
 
@@ -1634,14 +1635,15 @@ class RunPOVME:
                 points_filename = parameters["OutputFilenamePrefix"] + "point_field.pdb"
 
                 if parameters["CompressOutput"] == True:
-                    afile = gzip.open(points_filename + ".gz", "wb")
+                    afile = gzopenfile(points_filename + ".gz", "wb")
                 else:
-                    afile = open(points_filename, "w")
+                    afile = openfile(points_filename, "w")
 
                 afile.write(numpy_to_pdb(pts, "X").encode())
                 afile.close()
 
                 # save the points as npy
+
                 numpy.save(points_filename + ".npy", pts)
 
                 log(
@@ -1681,9 +1683,9 @@ class RunPOVME:
                     )
 
                     if parameters["CompressOutput"] == True:
-                        afile = gzip.open(points_filename + ".gz", "wb")
+                        afile = gzopenfile(points_filename + ".gz", "wb")
                     else:
-                        afile = open(points_filename, "w")
+                        afile = openfile(points_filename, "w")
 
                     afile.write(numpy_to_pdb(contig_pts, "X").encode())
                     afile.close()
@@ -1747,12 +1749,12 @@ class RunPOVME:
             # if the user requested a separate volume file, save that as well
             if parameters["SaveTabbedVolumeFile"] == True:
                 if parameters["CompressOutput"] == True:
-                    f = gzip.open(
+                    f = gzopenfile(
                         parameters["OutputFilenamePrefix"] + "volumes.tabbed.txt.gz",
                         "wb",
                     )
                 else:
-                    f = open(
+                    f = openfile(
                         parameters["OutputFilenamePrefix"] + "volumes.tabbed.txt", "w"
                     )
 
@@ -1764,19 +1766,19 @@ class RunPOVME:
             # volumes, generate that here.
             if parameters["SavePocketVolumesTrajectory"] == True:
                 if parameters["CompressOutput"] == True:
-                    traj_file = gzip.open(
+                    traj_file = gzopenfile(
                         parameters["OutputFilenamePrefix"] + "volume_trajectory.pdb.gz",
                         "wb",
                     )
                 else:
-                    traj_file = open(
+                    traj_file = openfile(
                         parameters["OutputFilenamePrefix"] + "volume_trajectory.pdb",
                         "w",
                     )
 
                 for frame_index in range(1, len(list(results_dic.keys())) + 1):
                     if parameters["CompressOutput"] == True:
-                        frame_file = gzip.open(
+                        frame_file = gzopenfile(
                             parameters["OutputFilenamePrefix"]
                             + "frame_"
                             + str(frame_index)
@@ -1784,7 +1786,7 @@ class RunPOVME:
                             "rb",
                         )
                     else:
-                        frame_file = open(
+                        frame_file = openfile(
                             parameters["OutputFilenamePrefix"]
                             + "frame_"
                             + str(frame_index)

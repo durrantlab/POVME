@@ -12,6 +12,7 @@ Changes
 5. Improved formatting (black) and docstrings.
 6. Fixed minor bug that assigned atoms with names like "HG21" to element "HG"
    rather than "H". No longer supporting element "HG".
+7. Moved examples directory to `povme/examples/`.
 
 2.0.3
 -----

@@ -36,6 +36,7 @@ import copy
 import sys
 import pickle as pickle
 import shutil
+from .common import openfile
 
 version = "beta"
 
@@ -917,7 +918,7 @@ class FileIO:
 
         # first, get the files that must exist
         self.parent_molecule.information.atom_information = pickle.load(
-            open(filename + "atom_information", "rb")
+            openfile(filename + "atom_information", "rb")
         )
         self.parent_molecule.information.coordinates = numpy.load(
             filename + "coordinates.npz"
@@ -926,15 +927,15 @@ class FileIO:
         # now look for other possible files (optional output)
         if os.path.exists(filename + "remarks"):
             self.parent_molecule.information.remarks = pickle.load(
-                open(filename + "remarks", "rb")
+                openfile(filename + "remarks", "rb")
             )
         if os.path.exists(filename + "hierarchy"):
             self.parent_molecule.information.hierarchy = pickle.load(
-                open(filename + "hierarchy", "rb")
+                openfile(filename + "hierarchy", "rb")
             )
         if os.path.exists(filename + "filename"):
             self.parent_molecule.information.filename = pickle.load(
-                open(filename + "filename", "rb")
+                openfile(filename + "filename", "rb")
             )
         if os.path.exists(filename + "bonds.npz"):
             self.parent_molecule.information.bonds = numpy.load(filename + "bonds.npz")[
@@ -945,7 +946,7 @@ class FileIO:
                 filename + "coordinates_undo_point.npz"
             )["arr_0"]
 
-        # self.parent_molecule.information = pickle.load( open( filename, "rb" ) )
+        # self.parent_molecule.information = pickle.load( openfile( filename, "rb" ) )
 
     def load_pdb_into(
         self,
@@ -972,7 +973,7 @@ class FileIO:
         self.parent_molecule.information.filename = filename
 
         # open/read the file
-        afile = open(filename, "r")
+        afile = openfile(filename, "r")
         self.load_pdb_into_using_file_object(
             afile, bonds_by_distance, serial_reindex, resseq_reindex
         )
@@ -1236,19 +1237,19 @@ class FileIO:
             # be pickled.
             pickle.dump(
                 self.parent_molecule.information.hierarchy,
-                open(filename + "hierarchy", "wb"),
+                openfile(filename + "hierarchy", "wb"),
                 -1,
             )
         if save_remarks == True:
             pickle.dump(
                 self.parent_molecule.information.remarks,
-                open(filename + "remarks", "wb"),
+                openfile(filename + "remarks", "wb"),
                 -1,
             )  # using the latest protocol
         if save_filename == True:
             pickle.dump(
                 self.parent_molecule.information.filename,
-                open(filename + "filename", "wb"),
+                openfile(filename + "filename", "wb"),
                 -1,
             )
 
@@ -1259,7 +1260,7 @@ class FileIO:
         # protocol parameter, so let's just use cPickle directly
         pickle.dump(
             self.parent_molecule.information.atom_information,
-            open(filename + "atom_information", "wb"),
+            openfile(filename + "atom_information", "wb"),
             -1,
         )
 
@@ -1312,7 +1313,7 @@ class FileIO:
                 self.resseq_reindex()
 
             if return_text == False:
-                afile = open(filename, "w")
+                afile = openfile(filename, "w")
             else:
                 return_string = ""
 

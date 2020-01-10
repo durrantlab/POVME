@@ -14,6 +14,7 @@ import getopt
 from numpy.lib.recfunctions import append_fields
 import multiprocessing
 import warnings
+from .common import openfile
 
 # POVME Pocket ID 1.0 is a program for identifying protein pockets and
 # generating appropriate pocket-encompassing inclusion spheres. These spheres,
@@ -115,7 +116,7 @@ class FileIO:
             """
 
         # open/read the file
-        afile = open(filename, "r")
+        afile = openfile(filename, "r")
         self.load_pdb_into_using_file_object(afile)
         afile.close()
 
@@ -1529,7 +1530,7 @@ def run_pocket_id(parameters):
     for i, pts in enumerate(all_pockets):
         filename = "pocket" + str(i + 1) + ".pdb"
         printit("\tSaving " + filename + "...")
-        f = open(filename, "w")
+        f = openfile(filename, "w")
         f.write("REMARK Pocket #" + str(i + 1) + "\n")
 
         # do I need to whiten stuff here? not sure what whitening is.
