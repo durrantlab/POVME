@@ -487,9 +487,7 @@ class Information:
         )[0]
 
         # get ones that are one-letter elements
-        fix_element_names[
-            indices_of_one_letter_elements
-        ] = numpy.char.rjust(
+        fix_element_names[indices_of_one_letter_elements] = numpy.char.rjust(
             numpy.array(fix_element_names[indices_of_one_letter_elements], dtype="|S1"),
             2,
         )

@@ -88,7 +88,3 @@ def gzopenfile(path, mode="r"):
     The file object.
     """
     return gzip.open(fix_filename(path, "r" in mode), mode)
-
-
-# f = openfile(".\common.py", "r")
-# print(f.read().decode())
