@@ -913,8 +913,8 @@ class FileIO:
 
             """
 
-        if filename[-1:] != os.sep:
-            filename = filename + os.sep
+        if filename[-1:] != "/":
+            filename = filename + "/"
 
         # first, get the files that must exist
         self.parent_molecule.information.atom_information = pickle.load(
@@ -1223,8 +1223,8 @@ class FileIO:
                 pass
 
         # filename is actually a directory, so append separator if needed
-        if filename[-1:] != os.sep:
-            filename = filename + os.sep
+        if filename[-1:] != "/":
+            filename = filename + "/"
 
         # make directory
         os.mkdir(filename)

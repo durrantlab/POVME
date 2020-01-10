@@ -1094,7 +1094,7 @@ class MultithreadingStringToMoleculeTask(MultithreadingTaskGeneral):
             self.results.append((index, tmp))
         else:  # save to disk, record filename
             pym_filename = (
-                "." + os.sep + ".povme_tmp" + os.sep + "frame_" + str(index) + ".pym"
+                "./.povme_tmp/frame_" + str(index) + ".pym"
             )
             tmp.fileio.save_pym(pym_filename, False, False, False, False, False)
             self.results.append((index, pym_filename))
@@ -1431,8 +1431,7 @@ class RunPOVME:
             "POVME_output."
             + time.strftime("%m-%d-%y")
             + "."
-            + time.strftime("%H-%M-%S")
-            + os.sep
+            + time.strftime("%H-%M-%S") + "/"
         )
         parameters["SaveIndividualPocketVolumes"] = False
         parameters["SavePocketVolumesTrajectory"] = False
@@ -1557,7 +1556,7 @@ class RunPOVME:
 
         # If the output prefix includes a directory, create that directory if
         # necessary
-        if os.sep in parameters["OutputFilenamePrefix"]:
+        if "/" in parameters["OutputFilenamePrefix"]:
             output_dirname = os.path.dirname(parameters["OutputFilenamePrefix"])
             # if os.path.exists(output_dirname): shutil.rmtree(output_dirname) # So delete the directory if it already exists.
             try:
@@ -1571,9 +1570,9 @@ class RunPOVME:
 
         # create temp swap directory if needed
         if parameters["UseDiskNotMemory"] == True:
-            if os.path.exists("." + os.sep + ".povme_tmp"):
-                shutil.rmtree("." + os.sep + ".povme_tmp")
-            os.mkdir("." + os.sep + ".povme_tmp")
+            if os.path.exists("./.povme_tmp"):
+                shutil.rmtree("./.povme_tmp")
+            os.mkdir("./.povme_tmp")
 
         # print out parameters
         log("Parameters:", parameters)
@@ -1727,8 +1726,8 @@ class RunPOVME:
 
             # delete the temp swap directory if necessary
             if parameters["UseDiskNotMemory"] == True:
-                if os.path.exists("." + os.sep + ".povme_tmp"):
-                    shutil.rmtree("." + os.sep + ".povme_tmp")
+                if os.path.exists("./.povme_tmp"):
+                    shutil.rmtree("./.povme_tmp")
 
             # display the results
             results_dic = {}
