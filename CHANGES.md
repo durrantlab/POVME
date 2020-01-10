@@ -13,6 +13,8 @@ Changes
 6. Fixed minor bug that assigned atoms with names like "HG21" to element "HG"
    rather than "H". No longer supporting element "HG".
 7. Moved examples directory to `povme/examples/`.
+8. Can now read both Windows and POSIX path names seamlessly (no need for
+   separate ini files).
 
 2.0.3
 -----
