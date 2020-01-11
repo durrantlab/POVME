@@ -14,7 +14,7 @@ import getopt
 from numpy.lib.recfunctions import append_fields
 import multiprocessing
 import warnings
-from .common import openfile
+from .common import openfile, setup_testing_dir, delete_testing_dir, test_passed
 
 # POVME Pocket ID 1.0 is a program for identifying protein pockets and
 # generating appropriate pocket-encompassing inclusion spheres. These spheres,
@@ -1293,6 +1293,41 @@ params = {}
 def run_pocket_id(parameters):
     ####### Now the meat of the program ########
 
+    # Make sure running Python3
+    if sys.version_info[0] < 3:
+        raise Exception("Please use Python 3 to run this version of POVME.")
+
+    # First, check if running in test mode.
+    testing_mode = False
+    if "--test" in parameters:
+        setup_testing_dir(
+            ["/examples/POVME_Pocket_ID_example/" + f for f in ["rel1_example.pdb"]]
+        )
+
+        # Keep track that running in testing mode.
+        testing_mode = True
+
+        # Change the argv list to run the copied ini file.
+        parameters = [
+            parameters[0],
+            "--filename",
+            "rel1_example.pdb",
+            "--pocket_detection_resolution",
+            "4.0",
+            "--pocket_measuring_resolution",
+            "1.0",
+            "--clashing_cutoff",
+            "3.0",
+            "--number_of_neighbors",
+            "4",
+            "--processors",
+            "4",
+            "--number_of_spheres",
+            "5",
+            "--sphere_padding",
+            "5.0",
+        ]
+
     # First, show a brief help file describing the command-line arguments.
     help_lines = []
     help_lines.append("")
@@ -1582,6 +1617,22 @@ def run_pocket_id(parameters):
         "The POVME PointsInclusionSphere commands are located in the header of each pocket{n}.pdb file. A text editor can be used to copy and paste these commands into a POVME input file."
     )
     print("")
+
+    if testing_mode:
+        import glob
+
+        with open("pocket1.pdb") as f:
+            if not "PointsInclusionSphere" in f.read():
+                raise Exception(
+                    "pocket1.pdb did not contain substring 'PointsInclusionSphere'"
+                )
+        num_output_files = len(glob.glob("*.pdb")) - 1
+        if num_output_files != 9:
+            raise Exception("Expected 9 output files, but got " + str(num_output_files))
+
+        delete_testing_dir()
+
+        test_passed()
 
 
 if __name__ == "__main__":

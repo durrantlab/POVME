@@ -15,6 +15,8 @@ Changes
 7. Moved examples directory to `povme/examples/`.
 8. Can now read both Windows and POSIX path names seamlessly (no need for
    separate ini files).
+9. Easy testing now available: `python POVME2.py --test` and `python
+   POVME_pocket_id.py --test`
 
 2.0.3
 -----

@@ -15,6 +15,7 @@
 from pathlib import Path
 import gzip
 import os
+import shutil
 
 try:
     from pathlib import WindowsPath as WinPath
@@ -88,3 +89,43 @@ def gzopenfile(path, mode="r"):
     The file object.
     """
     return gzip.open(fix_filename(path, "r" in mode), mode)
+
+
+def setup_testing_dir(files_to_copy_relative_to__file__):
+    """Create a temporary directory.
+
+    files_to_copy_relative_to__file__ -- A list of files to copy, relative to
+        the python file calling this function.
+    """
+
+    # Create a temporary directory.
+    test_dir = "./testing.tmp/"
+    if os.path.exists(test_dir):
+        raise IOError("Delete " + test_dir + " before running the test.")
+    os.mkdir(test_dir)
+
+    # Copy example files to this directory.
+    for fl in files_to_copy_relative_to__file__:
+        shutil.copy2(os.path.dirname(__file__) + fl, test_dir)
+
+    # Change into testing directory.
+    os.chdir(test_dir)
+
+
+def delete_testing_dir():
+    """Assuming you are already in the temporary directory, this will delete
+    it."""
+
+    # Assumes you are already in the temporary directory.
+    os.chdir("..")
+    shutil.rmtree("./testing.tmp/")
+
+
+def test_passed():
+    """Shows a message saying that a test passed."""
+
+    print("")
+    print("-----------------")
+    print("Passed all tests!")
+    print("-----------------")
+    print("")

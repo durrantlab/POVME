@@ -18,13 +18,13 @@ import time
 import numpy
 from . import pymolecule
 import os
-import shutil
 import random
 import multiprocessing
 import platform
 from functools import reduce
 from .__init__ import __version__
-from .common import openfile, gzopenfile, fix_filename
+from .common import openfile, gzopenfile, fix_filename, setup_testing_dir, delete_testing_dir, test_passed
+import shutil
 
 try:
     from io import StringIO
@@ -1093,9 +1093,7 @@ class MultithreadingStringToMoleculeTask(MultithreadingTaskGeneral):
         if parameters["UseDiskNotMemory"] == False:
             self.results.append((index, tmp))
         else:  # save to disk, record filename
-            pym_filename = (
-                "./.povme_tmp/frame_" + str(index) + ".pym"
-            )
+            pym_filename = "./.povme_tmp/frame_" + str(index) + ".pym"
             tmp.fileio.save_pym(pym_filename, False, False, False, False, False)
             self.results.append((index, pym_filename))
 
@@ -1393,11 +1391,22 @@ class RunPOVME:
 
         """
 
+        # Make sure running Python3
+        if sys.version_info[0] < 3:
+            raise Exception("Please use Python 3 to run this version of POVME.")
+
         start_time = time.time()
 
         # First, check if running in test mode.
+        testing_mode = False
         if "--test" in sys.argv:
-            print("Hi")
+            setup_testing_dir(["/examples/POVME_example/" + f for f in ["4NSS.pdb", "sample_POVME_input.ini"]])
+
+            # Keep track that running in testing mode.
+            testing_mode = True
+
+            # Change the argv list to run the copied ini file.
+            sys.argv[1] = "sample_POVME_input.ini"
 
         # Load the configuration file
         if len(argv) == 1:
@@ -1431,7 +1440,8 @@ class RunPOVME:
             "POVME_output."
             + time.strftime("%m-%d-%y")
             + "."
-            + time.strftime("%H-%M-%S") + "/"
+            + time.strftime("%H-%M-%S")
+            + "/"
         )
         parameters["SaveIndividualPocketVolumes"] = False
         parameters["SavePocketVolumesTrajectory"] = False
@@ -1875,6 +1885,26 @@ class RunPOVME:
                     # import cPickle as pickle
                     # pickle.dump(all_pts, open('dill.pickle', 'w'))
 
+        # If running in testing mode, make sure things look alright.
+        if testing_mode:
+            import glob
 
-if __name__ == "__main__":
-    dorun = RunPOVME(sys.argv)
+            expected_vols = set([1673.0, 1493.0, 1711.0, 1854.0, 2023.0])
+            actual_vols = set(results_dic.values())
+            if len(actual_vols - expected_vols) > 0:
+                raise Exception(
+                    "Expected volumes to be "
+                    + str(expected_vols)
+                    + ", but got "
+                    + str(actual_vols)
+                )
+            num_output_files = len(glob.glob("POVME_test_run/*"))
+            if num_output_files != 12:
+                raise Exception(
+                    "Expected 12 output files, but got " + str(num_output_files)
+                )
+
+            # Remove testing directory.
+            delete_testing_dir()
+
+            test_passed()
