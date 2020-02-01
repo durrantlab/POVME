@@ -45,13 +45,12 @@ web app.
 
 **Projected Dates**: 4/2021-4/2021
 
-**Description**: For each of our proposed web apps, we will create an online
-help system together with new tutorials so users understand how the updated
-software works.
+**Description**: We will create an online help system together with new
+tutorials so users understand how the updated software works.
 
 ## Publication
 
 **Projected Dates**: 5/2021-6/2021
 
 **Description**: To let the community know about our improvements, we will
-publish peer-reviewed manuscripts describing POVME2 and BINANA updates.
+publish peer-reviewed manuscripts describing the POVME2 updates.
