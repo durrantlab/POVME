@@ -1,8 +1,6 @@
-POVME 2.1
-=========
+# POVME 2.1
 
-0\. License: GNU General Public License version 3
--------------------------------------------------
+## 0. License: GNU General Public License version 3
 
 This program is free software: you can redistribute it and/or modify it under
 the terms of the GNU General Public License as published by the Free Software
@@ -18,8 +16,7 @@ You should have received a copy of the GNU General Public License along with
 this program. If not, see
 [https://www.gnu.org/licenses/](https://www.gnu.org/licenses/).
 
-1\. Download POVME 2.1
-----------------------
+## 1. Download POVME 2.1
 
 Begin by downloading POVME 2.1. An example input file is included with the
 download (in the 'povme/examples/' directory). This input file is heavily
@@ -38,8 +35,7 @@ If you use POVME in your work, please cite:
    An Enhanced Tool for Determining Pocket Shape and Volume Characteristics."
    J. Chem. Theory Comput. 10(11):5047-5056.
 
-2\. Align a PDB-formatted trajectory
-------------------------------------
+## 2. Align a PDB-formatted trajectory
 
 POVME accepts a multi-frame PDB (Protein Data Bank) file as input. The
 computer program [Visual Molecular Dynamics
@@ -50,8 +46,7 @@ translate or rotate in space. We note also that single-frame PDB files can
 likewise serve as POVME input if the user wishes only to measure the volume of
 a single pocket.
 
-3\. Define an inclusion region
-------------------------------
+## 3. Define an inclusion region
 
 The user must define an "inclusion" region. This region is constructed from a
 combination of user-specified spheres and rectangular prisms. The required
@@ -59,7 +54,7 @@ inclusion region should entirely encompass all the binding-pocket
 conformations of the trajectory. Specify the spheres and rectangular prisms of
 the inclusion region in a text-based POVME input file (e.g., "POVME.in"):
 
-```
+```text
 PointsInclusionSphere -7.12 2.60 -4.67 6.0
 PointsInclusionSphere -2.0 -2.0 -4.0 5.0
 PointsInclusionBox -5.0 -7.0 2.0 10.0 10.0 10.0
@@ -71,20 +66,18 @@ fourth parameter is a radius. For the rectangular prisms (i.e. "boxes"), the
 first three parameters are coordinates, and the last three are the dimensions
 of the box in the X, Y, and Z directions.
 
-4\. Define an exclusion region
-------------------------------
+## 4. Define an exclusion region
 
 An optional exclusion region defines portions of the inclusion region that
 should be ignored, perhaps because they are not truly associated with the
 pocket. It is similarly constructed from spheres and boxes:
 
-```
+```text
 PointsExclusionSphere -2.0 -2.0 -4.0 5.0
 PointsExclusionBox -5.0 -7.0 2.0 10.0 10.0 10.0
 ```
 
-5\. Create a field of equidistant points
-----------------------------------------
+## 5. Create a field of equidistant points
 
 To generate a field of equidistant points that encompasses all the
 binding-pocket conformations of the trajectory, POVME first floods the
@@ -92,12 +85,11 @@ user-specified inclusion region with points and then removes any points also
 contained in the optional exclusion region. You need to specify the distance
 separating each of these equidistant points:
 
-```
+```text
 GridSpacing 1.0
 ```
 
-6\. How to choose the inclusion and exclusion regions
------------------------------------------------------
+## 6. How to choose the inclusion and exclusion regions
 
 As you can imagine, identifying just the right set of inclusion and exclusion
 spheres and boxes to encompass the binding pocket is challenging. One approach
@@ -106,12 +98,11 @@ receptor using a program like VMD, and then iteratively add new inclusion and
 exclusion regions as required. You can optionally save the point field to a
 file called point_field.pdb for visualization:
 
-```
+```text
 SavePoints true
 ```
 
-7\. Specify the location of the receptor PDB file to analyze
-------------------------------------------------------------
+## 7. Specify the location of the receptor PDB file to analyze
 
 Once you've properly generated a pocket-encompassing point field, you're ready
 to use that point field to calculate pocket volumes. Here's how to specify the
@@ -121,8 +112,7 @@ location of the PDB receptor file that has the pocket you wish to analyze:
 
 Note that this file can be a trajectory containing multiple frames.
 
-8\. Remove points that are near receptor atoms
-----------------------------------------------
+## 8. Remove points that are near receptor atoms
 
 As the purpose of POVME is to measure the volume of a binding-pocket cavity,
 the program next removes any points that are close to receptor atoms, leaving
@@ -135,8 +125,7 @@ of the receptor before being removed:
 Note that if the receptor PDB file contains multiple frames, this will be done
 on a frame-by-frame basis.
 
-9\. Remove points outside the receptor's convex hull
-----------------------------------------------------
+## 9. Remove points outside the receptor's convex hull
 
 POVME 2.0 introduces an optional new feature for removing points that lie
 entirely outside the binding pocket. Specifically, the gift-wrapping algorithm
@@ -148,8 +137,7 @@ solvent-occupying space. To activate the convex-hull feature:
 
 ```ConvexHullExclusion true```
 
-10\. Remove points that are not contiguous with the primary pocket
-------------------------------------------------------------------
+## 10. Remove points that are not contiguous with the primary pocket
 
 Like the original POVME program, version 2.0 retains the optional ability to
 remove isolated patches of points that are not contiguous with the primary
@@ -157,7 +145,7 @@ binding pocket. This feature requires that the user define a third region,
 again using spheres and rectangular prisms, that always falls within the
 primary binding-pocket region, regardless of the trajectory frame considered:
 
-```
+```text
 ContiguousPocketSeedSphere 67.0 102.0 57.0 4.0
 ContiguousPocketSeedBox 50.0 50.0 50.0 10.0 10.0 10.0
 ```
@@ -165,7 +153,7 @@ ContiguousPocketSeedBox 50.0 50.0 50.0 10.0 10.0 10.0
 Two pocket volumes are considered "contiguous" if they share at least X
 neighboring points in common, where X is defined by:
 
-```
+```text
 ContiguousPointsCriteria 3
 ```
 
@@ -174,12 +162,11 @@ Note that points that are "kitty-corner" from each other count as neighbors.
 All pocket-occupying points within or contiguous to this region are retained,
 but isolated patches of points that are not directly connected are deleted.
 
-11\. Additional POVME parameters
---------------------------------
+## 11. Additional POVME parameters
 
 Here are some additional POVME parameters you might find helpful:
 
-```
+```text
 # Tell POVME how to perform the calculations.
 
 NumProcessors               12                             # POVME can use multiple processors on
@@ -245,8 +232,7 @@ CompressOutput                true                         # If you're short on 
                                                            # files using gz compression.
 ```
 
-12\. POVME output
------------------
+## 12. POVME output
 
 By default, POVME writes a number of files to the disk. The calculated pocket
 volumes, as well as user-defined parameters and progress messages, are saved

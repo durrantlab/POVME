@@ -17,6 +17,7 @@ Changes
    separate ini files).
 9. Easy testing now available: `python POVME2.py --test` and `python
    POVME_pocket_id.py --test`
+10. Added project roadmap.
 
 2.0.3
 -----
@@ -27,3 +28,9 @@ Changes
    2.0.2/2.0.3 output.
 3. Fixed NumPy warning.
 4. Spelling error ("Angstroms").
+
+2.0.1
+-----
+
+Note that POVME 2.0.1 and all earlier versions can be found at
+[https://sourceforge.net/projects/povme/files/](https://sourceforge.net/projects/povme/files/).
