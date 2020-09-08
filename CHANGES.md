@@ -5,10 +5,15 @@ Changes
 ---
 
 1. Updated version to 2.2.
-2. Fixed error that prevented POVME from saving its output to uncompressed
-   files. (Previously only writing to compressed output succeeded.)
-3. Throw warning when using Python 3.5 or earlier.
-4. Applied [Black formatter](https://black.readthedocs.io/en/stable/) to all
+2. Fixed an error that prevented POVME from saving its output to uncompressed
+   files. (Previously only writing output to compressed output succeeded.)
+3. POVME now throws a warning when using Python 3.5 or earlier.
+4. When the user does not specify any contiguous-pocket seed regions, POVME no
+   longer outputs the default value of the ContiguousPointsCriteria parameter
+   to the screen. In this case, POVME does not use the
+   ContiguousPointsCriteria parameter anyway, so outputing its value to the
+   screen only causes confusion.
+5. Applied [Black formatter](https://black.readthedocs.io/en/stable/) to all
    Python code.
 
 2.1
