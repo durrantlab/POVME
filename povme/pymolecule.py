@@ -21,7 +21,7 @@
     If you use pymolecule in your work, please cite [REFERENCE HERE]"""
 
 """Note: This is a beta version of pymolecule. Not intended for distribution
-    independent of POVME 2.1!!!"""
+    independent of POVME 2.2!!!"""
 
 
 import os
@@ -3507,11 +3507,17 @@ class OtherMolecules:
         if (
             pairwise_comparison == True
         ):  # so use a simple pairwise comparison to find close atoms
-            indices1, indices2 = self.parent_molecule.selections.select_close_atoms_from_different_molecules(
+            (
+                indices1,
+                indices2,
+            ) = self.parent_molecule.selections.select_close_atoms_from_different_molecules(
                 other_mol, cutoff, True
             )
         else:  # so the more sophisticated heirarchical method
-            indices1, indices2 = self.parent_molecule.selections.select_close_atoms_from_different_molecules(
+            (
+                indices1,
+                indices2,
+            ) = self.parent_molecule.selections.select_close_atoms_from_different_molecules(
                 other_mol, cutoff, False, True
             )  # terminate early is true because you don't want all close ones
 
@@ -3645,7 +3651,10 @@ class OtherMolecules:
             cutoff = numpy.amin(cdist(self_tmp, other_tmp))
 
             # now get all the indices that come within that cutoff
-            self_indices, other_indices = self.parent_molecule.selections.select_close_atoms_from_different_molecules(
+            (
+                self_indices,
+                other_indices,
+            ) = self.parent_molecule.selections.select_close_atoms_from_different_molecules(
                 other_molecule, cutoff, False
             )
 

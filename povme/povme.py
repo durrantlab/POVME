@@ -1,4 +1,4 @@
-# POVME 2.1 is released under the GNU General Public License (see
+# POVME 2.2 is released under the GNU General Public License (see
 # http://www.gnu.org/licenses/gpl.html). If you have any questions, comments,
 # or suggestions, please don't hesitate to contact me, Jacob Durrant, at
 # durrantj [at] pitt [dot] edu.
@@ -23,7 +23,14 @@ import multiprocessing
 import platform
 from functools import reduce
 from .__init__ import __version__
-from .common import openfile, gzopenfile, fix_filename, setup_testing_dir, delete_testing_dir, test_passed
+from .common import (
+    openfile,
+    gzopenfile,
+    fix_filename,
+    setup_testing_dir,
+    delete_testing_dir,
+    test_passed,
+)
 import shutil
 
 try:
@@ -34,6 +41,23 @@ except:
 from scipy.spatial.distance import cdist
 from scipy.spatial.distance import pdist
 from scipy.spatial.distance import squareform
+
+
+def write_to_file(fo, s, encode=True):
+    """Writes to a file, encoding if necessary.
+
+    Arguments:
+        fo -- The file object.
+        s -- The string to write.
+        encode (bool, optional) -- Whether to encode the file before writing.
+            Defaults to True.
+
+    """
+
+    if encode:
+        s = s.encode()
+
+    fo.write(s)
 
 
 def log(astr, parameters):
@@ -55,7 +79,8 @@ def log(astr, parameters):
         else:
             f = open(parameters["OutputFilenamePrefix"] + "output.txt", "a")
 
-        f.write((astr + "\n").encode())
+        write_to_file(f, astr + "\n", encode=parameters["CompressOutput"])
+
         f.close()
     except:
         pass
@@ -672,7 +697,7 @@ def dx_freq(freq_mat, parameters):
 
     """
 
-    header_template = """# Data from POVME 2.1
+    header_template = """# Data from POVME 2.2
 #
 # FREQUENCY (unitless)
 #
@@ -760,17 +785,19 @@ component "data" value 3"""
             N,
         )  # format the header
         footer = footer_template  # the footer needs no formatting
-        dx_file.write(header.encode())
+        write_to_file(dx_file, header, encode=parameters["CompressOutput"])
         newline_counter = 1
         for i in range(N):  # write the data to the DX file
-            dx_file.write(("%8.6e" % freq_mat[i, 3]).encode())
+            write_to_file(
+                dx_file, "%8.6e" % freq_mat[i, 3], encode=parameters["CompressOutput"]
+            )
             if newline_counter == 3:
                 newline_counter = 0
-                dx_file.write("\n".encode())
+                write_to_file(dx_file, "\n", encode=parameters["CompressOutput"])
             else:
-                dx_file.write(" ".encode())
+                write_to_file(dx_file, " ", encode=parameters["CompressOutput"])
             newline_counter += 1
-        dx_file.write(footer.encode())
+        write_to_file(dx_file, footer, encode=parameters["CompressOutput"])
         dx_file.close
     return
 
@@ -1051,7 +1078,7 @@ class MultithreadingCalcVolumeTask(MultithreadingTaskGeneral):
                     + ".pdb",
                     "w",
                 )
-            fl.write(frame_text.encode())
+            write_to_file(fl, frame_text, encode=parameters["CompressOutput"])
             fl.close()
 
         extra_data_to_add = {}
@@ -1395,12 +1422,22 @@ class RunPOVME:
         if sys.version_info[0] < 3:
             raise Exception("Please use Python 3 to run this version of POVME.")
 
+        if sys.version_info[1] < 6:
+            print(
+                "WARNING: POVME2 may fail on Python 3.5 or older. Try a newer Python if you get an error.\n"
+            )
+
         start_time = time.time()
 
         # First, check if running in test mode.
         testing_mode = False
         if "--test" in sys.argv:
-            setup_testing_dir(["/examples/POVME_example/" + f for f in ["4NSS.pdb", "sample_POVME_input.ini"]])
+            setup_testing_dir(
+                [
+                    "/examples/POVME_example/" + f
+                    for f in ["4NSS.pdb", "sample_POVME_input.ini"]
+                ]
+            )
 
             # Keep track that running in testing mode.
             testing_mode = True
@@ -1564,6 +1601,11 @@ class RunPOVME:
                 Exclude.region_type = "BOX"
                 parameters["PointsExcludeRegions"].append(Exclude)
 
+        # If there are no ContiguousPocketSeedRegions, don't print out the
+        # ContiguousPointsCriteria parameter.
+        if len(parameters["ContiguousPocketSeedRegions"]) == 0:
+            del parameters["ContiguousPointsCriteria"]
+
         # If the output prefix includes a directory, create that directory if
         # necessary
         if "/" in parameters["OutputFilenamePrefix"]:
@@ -1648,7 +1690,9 @@ class RunPOVME:
                 else:
                     afile = openfile(points_filename, "w")
 
-                afile.write(numpy_to_pdb(pts, "X").encode())
+                write_to_file(
+                    afile, numpy_to_pdb(pts, "X"), encode=parameters["CompressOutput"]
+                )
                 afile.close()
 
                 # save the points as npy
@@ -1696,7 +1740,11 @@ class RunPOVME:
                     else:
                         afile = openfile(points_filename, "w")
 
-                    afile.write(numpy_to_pdb(contig_pts, "X").encode())
+                    write_to_file(
+                        afile,
+                        numpy_to_pdb(contig_pts, "X"),
+                        encode=parameters["CompressOutput"],
+                    )
                     afile.close()
 
                     log(
@@ -1762,13 +1810,18 @@ class RunPOVME:
                         parameters["OutputFilenamePrefix"] + "volumes.tabbed.txt.gz",
                         "wb",
                     )
+
                 else:
                     f = openfile(
                         parameters["OutputFilenamePrefix"] + "volumes.tabbed.txt", "w"
                     )
-
                 for i in sorted(results_dic.keys()):
-                    f.write((str(i) + "\t" + str(results_dic[i]) + "\n").encode())
+                    write_to_file(
+                        f,
+                        str(i) + "\t" + str(results_dic[i]) + "\n",
+                        encode=parameters["CompressOutput"],
+                    )
+
                 f.close()
 
             # if the user wanted a single trajectory containing all the

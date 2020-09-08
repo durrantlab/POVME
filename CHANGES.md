@@ -1,6 +1,16 @@
 Changes
 =======
 
+2.2
+---
+
+1. Updated version to 2.2.
+2. Fixed error that prevented POVME from saving its output to uncompressed
+   files. (Previously only writing to compressed output succeeded.)
+3. Throw warning when using Python 3.5 or earlier.
+4. Applied [Black formatter](https://black.readthedocs.io/en/stable/) to all
+   Python code.
+
 2.1
 ---
 

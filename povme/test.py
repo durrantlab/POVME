@@ -1,4 +1,4 @@
-# POVME 2.1 is released under the GNU General Public License (see
+# POVME 2.2 is released under the GNU General Public License (see
 # http://www.gnu.org/licenses/gpl.html). If you have any questions, comments,
 # or suggestions, please don't hesitate to contact me, Jacob Durrant, at
 # durrantj [at] pitt [dot] edu.
