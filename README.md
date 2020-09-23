@@ -1,4 +1,4 @@
-# POVME 2.2
+# POVME 2.2.1
 
 ## 0. License: GNU General Public License version 3
 
@@ -16,9 +16,9 @@ You should have received a copy of the GNU General Public License along with
 this program. If not, see
 [https://www.gnu.org/licenses/](https://www.gnu.org/licenses/).
 
-## 1. Download POVME 2.2
+## 1. Download POVME 2.2.1
 
-Begin by downloading POVME 2.2. An example input file is included with the
+Begin by downloading POVME 2.2.1. An example input file is included with the
 download (in the 'povme/examples/' directory). This input file is heavily
 commented and may be even more useful that the information provided on this
 website.
@@ -127,7 +127,7 @@ on a frame-by-frame basis.
 
 ## 9. Remove points outside the receptor's convex hull
 
-POVME 2.0 introduces an optional new feature for removing points that lie
+POVME 2.0 introduced an optional new feature for removing points that lie
 entirely outside the binding pocket. Specifically, the gift-wrapping algorithm
 is used in combination with the Akl-Toussaint heuristic to define the convex
 hull of receptor atoms near the user-defined inclusion region. Any points that
@@ -139,28 +139,33 @@ solvent-occupying space. To activate the convex-hull feature:
 
 ## 10. Remove points that are not contiguous with the primary pocket
 
-Like the original POVME program, version 2.0 retains the optional ability to
+Like the original POVME program, version 2.2.1 retains the optional ability to
 remove isolated patches of points that are not contiguous with the primary
-binding pocket. This feature requires that the user define a third region,
-again using spheres and rectangular prisms, that always falls within the
-primary binding-pocket region, regardless of the trajectory frame considered:
+binding pocket. POVME perfoms this task in two steps.
+
+First, POVME applys a low-pass filter to check the connectedness of the
+remaining pocket-occupying points. It retains only those points that have at
+least X neighboring points, where X is defined:
+
+```text
+ContiguousPointsCriteria 3
+```
+
+(Note that points that are "kitty-corner" from each other count as neighbors.)
+
+Second, POVME identifies which of the remaining connected points are also
+connected to a user-defined contiguous pocket seed volume (e.g., located at
+the center of the traditionally defined pocket), where the seed volume is
+defined:
 
 ```text
 ContiguousPocketSeedSphere 67.0 102.0 57.0 4.0
 ContiguousPocketSeedBox 50.0 50.0 50.0 10.0 10.0 10.0
 ```
 
-Two pocket volumes are considered "contiguous" if they share at least X
-neighboring points in common, where X is defined by:
-
-```text
-ContiguousPointsCriteria 3
-```
-
-Note that points that are "kitty-corner" from each other count as neighbors.
-
-All pocket-occupying points within or contiguous to this region are retained,
-but isolated patches of points that are not directly connected are deleted.
+All pocket-occupying points contiguous (or connected) to this region are
+retained, but isolated patches of points that are not directly connected are
+deleted.
 
 ## 11. Additional POVME parameters
 

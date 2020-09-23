@@ -21,7 +21,7 @@
     If you use pymolecule in your work, please cite [REFERENCE HERE]"""
 
 """Note: This is a beta version of pymolecule. Not intended for distribution
-    independent of POVME 2.2!!!"""
+    independent of POVME 2.2.1!!!"""
 
 
 import os

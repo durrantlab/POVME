@@ -1,6 +1,13 @@
 Changes
 =======
 
+2.2.1
+-----
+
+1. Made minor changes to the `README.md` file to clarify the
+   `ContiguousPointsCriteria`, `ContiguousPocketSeedSphere`, and
+   `ContiguousPocketSeedBox` parameters.
+
 2.2
 ---
 
