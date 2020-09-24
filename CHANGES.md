@@ -7,6 +7,7 @@ Changes
 1. Made minor changes to the `README.md` file to clarify the
    `ContiguousPointsCriteria`, `ContiguousPocketSeedSphere`, and
    `ContiguousPocketSeedBox` parameters.
+2. Otherwise identical to POVME 2.2.
 
 2.2
 ---
