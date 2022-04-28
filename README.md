@@ -1,4 +1,4 @@
-# POVME 2.2.1
+# POVME 2.2.2
 
 ## 0. License: GNU General Public License version 3
 
@@ -16,9 +16,9 @@ You should have received a copy of the GNU General Public License along with
 this program. If not, see
 [https://www.gnu.org/licenses/](https://www.gnu.org/licenses/).
 
-## 1. Download POVME 2.2.1
+## 1. Download POVME 2.2.2
 
-Begin by downloading POVME 2.2.1. An example input file is included with the
+Begin by downloading POVME 2.2.2. An example input file is included with the
 download (in the 'povme/examples/' directory). This input file is heavily
 commented and may be even more useful that the information provided on this
 website.
@@ -139,7 +139,7 @@ solvent-occupying space. To activate the convex-hull feature:
 
 ## 10. Remove points that are not contiguous with the primary pocket
 
-Like the original POVME program, version 2.2.1 retains the optional ability to
+Like the original POVME program, version 2.2.2 retains the optional ability to
 remove isolated patches of points that are not contiguous with the primary
 binding pocket. POVME perfoms this task in two steps.
 

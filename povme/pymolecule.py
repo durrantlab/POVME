@@ -21,7 +21,7 @@
     If you use pymolecule in your work, please cite [REFERENCE HERE]"""
 
 """Note: This is a beta version of pymolecule. Not intended for distribution
-    independent of POVME 2.2.1!!!"""
+    independent of POVME 2.2.2!!!"""
 
 
 import os
@@ -1031,7 +1031,7 @@ class FileIO:
         for index in remark_indices:
             astr = ""
             for name in source_data.dtype.names[1:]:
-                astr = astr + source_data[name][index]
+                astr = astr + source_data[name][index].decode('utf-8')
             self.parent_molecule.information.remarks.append(astr.rstrip())
 
         if source_data.ndim == 0:
@@ -1150,7 +1150,7 @@ class FileIO:
             for index in conect_indices:
                 astr = ""
                 for name in source_data.dtype.names[1:]:
-                    astr = astr + source_data[name][index]
+                    astr = astr + source_data[name][index].decode('utf-8')
                 astr = astr.rstrip()
 
                 indices = []

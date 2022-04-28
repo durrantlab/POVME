@@ -1,6 +1,11 @@
 Changes
 =======
 
+2.2.2
+-----
+
+1. Fixed text-encoding bug.
+
 2.2.1
 -----
 
