@@ -1,6 +1,12 @@
 Changes
 =======
 
+WIP
+---
+
+Minor stylistic changes to code.
+NOTE: There is a MP error in python3. Need to fix. Use 1 processor for now.
+
 2.2.2
 -----
 

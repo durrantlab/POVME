@@ -149,10 +149,7 @@ class Multithreading:
                 return
 
             # now, divide the inputs into the appropriate number of processors
-            inputs_divided = {}
-            for t in range(num_processors):
-                inputs_divided[t] = []
-
+            inputs_divided = {t: [] for t in range(num_processors)}
             for t in range(0, len(inputs), num_processors):
                 for t2 in range(num_processors):
                     index = t + t2
@@ -165,7 +162,7 @@ class Multithreading:
 
             arrays = []
             threads = []
-            for i in range(num_processors):
+            for _ in range(num_processors):
                 athread = task_class()
                 athread.total_num_tasks = len(inputs)
 
@@ -183,11 +180,12 @@ class Multithreading:
                 p.start()
                 processes.append(p)
 
-            while running.value > 0:
-                is_running = 0  # wait for everything to finish
+            is_running = 0  # wait for everything to finish
 
+            while running.value > 0:
+                pass
             # compile all results into one list
-            for thread in threads:
+            for _ in threads:
                 chunk = results_queue.get()
                 self.results.extend(chunk)
 
@@ -267,11 +265,7 @@ class ConvexHull:
 
         # we want the index with the greater x-value, so we don't get
         # identical segments in the dictionary more than once
-        if seg_index[0][0] > seg_index[1][0]:
-            index = seg_index
-        else:
-            index = seg_index[::-1]
-
+        index = seg_index if seg_index[0][0] > seg_index[1][0] else seg_index[::-1]
         if index in seg_dict:
             return seg_dict[index]
         else:
@@ -370,17 +364,13 @@ class ConvexHull:
         # now find the best triangle
         triangles = []
 
-        seg_list = set([(point1, point2)])
+        seg_list = {(point1, point2)}
         norm_dict = {(point1, point2): xaxis}
         self.increment_seg_dict(seg_dict, (point1, point2))
 
         counter = 0
         first_time = True
 
-        begintime = time.time()
-        section1 = 0.0
-        section2 = 0.0
-        section3 = 0.0
         while (
             seg_list
         ):  # as long as there are unexplored edges of triangles in the hull...
@@ -584,9 +574,7 @@ def unique_rows(a):
     b = numpy.ascontiguousarray(a).view(
         numpy.dtype((numpy.void, a.dtype.itemsize * a.shape[1]))
     )
-    unique_a = numpy.unique(b).view(a.dtype).reshape(-1, a.shape[1])
-
-    return unique_a
+    return numpy.unique(b).view(a.dtype).reshape(-1, a.shape[1])  # unique_a
 
 
 def create_pdb_line(numpy_array, index, resname, letter):
@@ -615,10 +603,10 @@ def create_pdb_line(numpy_array, index, resname, letter):
         + letter.rjust(2)
         + str(index % 9999).rjust(4)
     )
-    output = output + ("%.3f" % numpy_array[0]).rjust(12)
-    output = output + ("%.3f" % numpy_array[1]).rjust(8)
-    output = output + ("%.3f" % numpy_array[2]).rjust(8)
-    output = output + letter.rjust(24)
+    output += ("%.3f" % numpy_array[0]).rjust(12)
+    output += ("%.3f" % numpy_array[1]).rjust(8)
+    output += ("%.3f" % numpy_array[2]).rjust(8)
+    output += letter.rjust(24)
 
     return output
 
@@ -697,26 +685,6 @@ def dx_freq(freq_mat, parameters):
 
     """
 
-    header_template = """# Data from POVME 2.2.2
-#
-# FREQUENCY (unitless)
-#
-object 1 class gridpositions counts %d %d %d
-origin %8.6e %8.6e %8.6e
-delta %8.6e 0.000000e+00 0.000000e+00
-delta 0.000000e+00 %8.6e 0.000000e+00
-delta 0.000000e+00 0.000000e+00 %8.6e
-object 2 class gridconnections counts %d %d %d
-object 3 class array type double rank 0 items %d data follows
-"""
-
-    footer_template = """
-attribute "dep" string "positions"
-object "regular positions regular connections" class field
-component "positions" value 1
-component "connections" value 2
-component "data" value 3"""
-
     # 1. Sort the points into the proper order for a dx file
 
     # already sorted correctly
@@ -769,6 +737,19 @@ component "data" value 3"""
                 parameters["OutputFilenamePrefix"] + "volumetric_density.dx", "w"
             )
 
+        header_template = """# Data from POVME 2.2.2
+#
+# FREQUENCY (unitless)
+#
+object 1 class gridpositions counts %d %d %d
+origin %8.6e %8.6e %8.6e
+delta %8.6e 0.000000e+00 0.000000e+00
+delta 0.000000e+00 %8.6e 0.000000e+00
+delta 0.000000e+00 0.000000e+00 %8.6e
+object 2 class gridconnections counts %d %d %d
+object 3 class array type double rank 0 items %d data follows
+"""
+
         header = header_template % (
             nx,
             ny,
@@ -784,6 +765,13 @@ component "data" value 3"""
             nz,
             N,
         )  # format the header
+        footer_template = """
+attribute "dep" string "positions"
+object "regular positions regular connections" class field
+component "positions" value 1
+component "connections" value 2
+component "data" value 3"""
+
         footer = footer_template  # the footer needs no formatting
         write_to_file(dx_file, header, encode=parameters["CompressOutput"])
         newline_counter = 1
@@ -1037,12 +1025,9 @@ class MultithreadingCalcVolumeTask(MultithreadingTaskGeneral):
 
         log("\tFrame " + str(frame_indx) + ": " + repr(volume) + " A^3", parameters)
         if parameters["SaveIndividualPocketVolumes"] == True:
-            frame_text = ""
-            frame_text = frame_text + "REMARK Frame " + str(frame_indx) + "\n"
-            frame_text = (
-                frame_text + "REMARK Volume = " + repr(volume) + " Cubic Angstroms\n"
-            )
-            frame_text = frame_text + numpy_to_pdb(pts, "X")
+            frame_text = f"REMARK Frame {str(frame_indx)}" + "\n"
+            frame_text += f"REMARK Volume = {repr(volume)}" + " Cubic Angstroms\n"
+            frame_text += numpy_to_pdb(pts, "X")
 
             if parameters["OutputEqualNumPointsPerFrame"] == True:
                 # you need to find the points that are in pts_deleted but not
@@ -1120,7 +1105,7 @@ class MultithreadingStringToMoleculeTask(MultithreadingTaskGeneral):
         if parameters["UseDiskNotMemory"] == False:
             self.results.append((index, tmp))
         else:  # save to disk, record filename
-            pym_filename = "./.povme_tmp/frame_" + str(index) + ".pym"
+            pym_filename = f"./.povme_tmp/frame_{str(index)}.pym"
             tmp.fileio.save_pym(pym_filename, False, False, False, False, False)
             self.results.append((index, pym_filename))
 
@@ -1185,8 +1170,8 @@ class Region:
 
         # unfortunately, numpy.around rounds evenly, so 0.5 rounds to 0.0 and
         # 1.5 rounds to 2.0. very annoying, I'll just add a tiny amount to 0.5
-        # => 0.500001 this should work, since user is unlikely to select
-        # region center or radius with such precision
+        # => 0.500001 this should work, since user is unlikely to select region
+        # center or radius with such precision
 
         pts = pts + 1e-10
         return numpy.around(pts / reso) * reso
@@ -1223,52 +1208,47 @@ class Region:
                 reso,
             )
 
-            total_pts = numpy.empty((len(xs) * len(ys) * len(zs), 3))
-
-            i = 0
-            for x in xs:
-                for y in ys:
-                    for z in zs:
-                        total_pts[i][0] = x
-                        total_pts[i][1] = y
-                        total_pts[i][2] = z
-
-                        i = i + 1
-
-            total_pts = self.__snap(total_pts, reso)
-
+            total_pts = self._convert_xyz_to_numpy_arr(xs, ys, zs, reso)
         elif self.region_type == "SPHERE":
-            xs = numpy.arange(
-                self.center[0] - self.radius, self.center[0] + self.radius, reso
-            )
-            ys = numpy.arange(
-                self.center[1] - self.radius, self.center[1] + self.radius, reso
-            )
-            zs = numpy.arange(
-                self.center[2] - self.radius, self.center[2] + self.radius, reso
-            )
-
-            total_pts = numpy.empty((len(xs) * len(ys) * len(zs), 3))
-
-            i = 0
-            for x in xs:
-                for y in ys:
-                    for z in zs:
-                        total_pts[i][0] = x
-                        total_pts[i][1] = y
-                        total_pts[i][2] = z
-
-                        i = i + 1
-
-            total_pts = self.__snap(total_pts, reso)
-
-            # now remove all the points outside of this sphere
-            index_inside_sphere = numpy.nonzero(
-                cdist(total_pts, numpy.array([self.center])) < self.radius
-            )[0]
-            total_pts = total_pts[index_inside_sphere]
-
+            total_pts = self._make_sphere_pts(reso)
         return total_pts
+
+    def _make_sphere_pts(self, reso):
+        xs = numpy.arange(
+            self.center[0] - self.radius, self.center[0] + self.radius, reso
+        )
+        ys = numpy.arange(
+            self.center[1] - self.radius, self.center[1] + self.radius, reso
+        )
+        zs = numpy.arange(
+            self.center[2] - self.radius, self.center[2] + self.radius, reso
+        )
+
+        result = self._convert_xyz_to_numpy_arr(xs, ys, zs, reso)
+            # now remove all the points outside of this sphere
+        index_inside_sphere = numpy.nonzero(
+            cdist(result, numpy.array([self.center])) < self.radius
+        )[0]
+        result = result[index_inside_sphere]
+
+        return result
+
+    def _convert_xyz_to_numpy_arr(self, xs, ys, zs, reso):
+        result = numpy.empty((len(xs) * len(ys) * len(zs), 3))
+
+        i = 0
+        for x in xs:
+            for y in ys:
+                for z in zs:
+                    result[i][0] = x
+                    result[i][1] = y
+                    result[i][2] = z
+
+                    i = i + 1
+
+        result = self.__snap(result, reso)
+
+        return result
 
 
 class ConfigFile:
