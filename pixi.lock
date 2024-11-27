@@ -4953,7 +4953,7 @@ packages:
   name: povme
   version: 2.2.1
   path: .
-  sha256: bbaba8b4d02715eeabdafbae58e27023b697f2da2b19fcb73b84827cab93823a
+  sha256: d8744933696078dfe7898d25cce26b9d324afb9d9096a313f2e55fff9281bdc1
   requires_dist:
   - numpy>=2.1.3,<3
   - scipy>=1.14.1,<2

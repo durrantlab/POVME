@@ -12,35 +12,28 @@
 #    for Determining Pocket Shape and Volume Characteristics." J Chem Theory
 #    Comput 10.11: 5047-56.
 
+from typing import Any
+
 import math
+import multiprocessing
+import os
+import platform
+import shutil
 import sys
 import time
-import numpy
-from . import pymolecule
-import os
-import random
-import multiprocessing
-import platform
 from functools import reduce
-from .__init__ import __version__
-from .common import (
-    openfile,
-    gzopenfile,
-    fix_filename,
-    setup_testing_dir,
-    delete_testing_dir,
-    test_passed,
-)
-import shutil
+
+import numpy
+
+from . import __version__, pymolecule
+from .common import fix_filename, gzopenfile, openfile
 
 try:
     from io import StringIO
-except:
+except ImportError:
     from io import StringIO
 
-from scipy.spatial.distance import cdist
-from scipy.spatial.distance import pdist
-from scipy.spatial.distance import squareform
+from scipy.spatial.distance import cdist, pdist, squareform
 
 
 def write_to_file(fo, s, encode=True):
@@ -74,7 +67,7 @@ def log(astr, parameters):
 
     # Save it to the output file as well.
     try:
-        if parameters["CompressOutput"] == True:
+        if parameters["CompressOutput"]:
             f = gzopenfile(parameters["OutputFilenamePrefix"] + "output.txt.gz", "ab")
         else:
             f = open(parameters["OutputFilenamePrefix"] + "output.txt", "a")
@@ -89,7 +82,7 @@ def log(astr, parameters):
 class Multithreading:
     """A class for running calculations on multiple processors."""
 
-    results = []
+    results: list[Any] = []
 
     def __init__(self, inputs, num_processors, task_class):
         """Launches a calculation on multiple processors.
@@ -194,7 +187,7 @@ class MultithreadingTaskGeneral:
     """A parent class of others that governs what calculations are run on each
     thread"""
 
-    results = []
+    results: list[Any] = []
 
     def runit(self, running, mutex, results_queue, items):
         """Launches the calculations on this thread
@@ -727,8 +720,8 @@ def dx_freq(freq_mat, parameters):
     ) == N, "Something is wrong with the freq_mat array: it is not a prismatic shape"
 
     # 3. write the header and footer
-    if parameters["SaveVolumetricDensityMap"] == True:
-        if parameters["CompressOutput"] == True:
+    if parameters["SaveVolumetricDensityMap"]:
+        if parameters["CompressOutput"]:
             dx_file = gzopenfile(
                 parameters["OutputFilenamePrefix"] + "volumetric_density.dx.gz", "wb"
             )
@@ -811,11 +804,11 @@ class MultithreadingCalcVolumeTask(MultithreadingTaskGeneral):
 
         # if the user wants to save empty points (points that are removed),
         # then we need a copy of the original
-        if parameters["OutputEqualNumPointsPerFrame"] == True:
+        if parameters["OutputEqualNumPointsPerFrame"]:
             pts_deleted = pts.copy()
 
         # you may need to load it from disk if the user so specified
-        if parameters["UseDiskNotMemory"] == True:  # so you need to load it from disk
+        if parameters["UseDiskNotMemory"]:  # so you need to load it from disk
             pym_filename = pdb
             pdb = pymolecule.Molecule()
             pdb.fileio.load_pym_into(pym_filename)
@@ -927,7 +920,7 @@ class MultithreadingCalcVolumeTask(MultithreadingTaskGeneral):
         pts = numpy.delete(pts, close_pt_index, axis=0)
 
         # exclude points outside convex hull
-        if parameters["ConvexHullExclusion"] == True:
+        if parameters["ConvexHullExclusion"]:
             convex_hull_3d = ConvexHull()
 
             # get the coordinates of the non-hydrogen atoms (faster to discard
@@ -1024,12 +1017,12 @@ class MultithreadingCalcVolumeTask(MultithreadingTaskGeneral):
         volume = len(pts) * math.pow(parameters["GridSpacing"], 3)
 
         log("\tFrame " + str(frame_indx) + ": " + repr(volume) + " A^3", parameters)
-        if parameters["SaveIndividualPocketVolumes"] == True:
+        if parameters["SaveIndividualPocketVolumes"]:
             frame_text = f"REMARK Frame {str(frame_indx)}" + "\n"
             frame_text += f"REMARK Volume = {repr(volume)}" + " Cubic Angstroms\n"
             frame_text += numpy_to_pdb(pts, "X")
 
-            if parameters["OutputEqualNumPointsPerFrame"] == True:
+            if parameters["OutputEqualNumPointsPerFrame"]:
                 # you need to find the points that are in pts_deleted but not
                 # in pts
                 tmp = reduce(
@@ -1047,7 +1040,7 @@ class MultithreadingCalcVolumeTask(MultithreadingTaskGeneral):
 
             frame_text = frame_text + "END\n"
 
-            if parameters["CompressOutput"] == True:
+            if parameters["CompressOutput"]:
                 fl = gzopenfile(
                     parameters["OutputFilenamePrefix"]
                     + "frame_"
@@ -1067,7 +1060,7 @@ class MultithreadingCalcVolumeTask(MultithreadingTaskGeneral):
             fl.close()
 
         extra_data_to_add = {}
-        if parameters["SaveVolumetricDensityMap"] == True:
+        if parameters["SaveVolumetricDensityMap"]:
             extra_data_to_add["SaveVolumetricDensityMap"] = pts
 
         self.results.append((frame_indx, volume, extra_data_to_add))
@@ -1225,7 +1218,7 @@ class Region:
         )
 
         result = self._convert_xyz_to_numpy_arr(xs, ys, zs, reso)
-            # now remove all the points outside of this sphere
+        # now remove all the points outside of this sphere
         index_inside_sphere = numpy.nonzero(
             cdist(result, numpy.array([self.center])) < self.radius
         )[0]
@@ -1390,55 +1383,25 @@ class RunPOVME:
 
         return molecules
 
-    def __init__(self, argv):
+    def __init__(
+        self,
+        path_config: str,
+        path_pdb: str | None = None,
+        output_prefix: str | None = None,
+    ) -> None:
         """Start POVME
 
         Arguments:
-        argv -- A list of the command-line arguments.
-
+            path_config: Path to configuration file.
+            path_pdb: Path to PDB file. This will overwrite the configuration file.
+            output_prefix: Path to output directory including directories.
         """
-
-        # Make sure running Python3
-        if sys.version_info[0] < 3:
-            raise Exception("Please use Python 3 to run this version of POVME.")
-
-        if sys.version_info[1] < 6:
-            print(
-                "WARNING: POVME2 may fail on Python 3.5 or older. Try a newer Python if you get an error.\n"
-            )
-
         start_time = time.time()
 
-        # First, check if running in test mode.
-        testing_mode = False
-        if "--test" in sys.argv:
-            setup_testing_dir(
-                [
-                    "/examples/POVME_example/" + f
-                    for f in ["4NSS.pdb", "sample_POVME_input.ini"]
-                ]
-            )
-
-            # Keep track that running in testing mode.
-            testing_mode = True
-
-            # Change the argv list to run the copied ini file.
-            sys.argv[1] = "sample_POVME_input.ini"
-
-        # Load the configuration file
-        if len(argv) == 1:
-            print("\nPOVME " + __version__)
-            print(
-                "\nPlease specify the input file from the command line!\n\nExample: python POVME.py input_file.ini"
-            )
-            self.reference({})
-            print("")
-            sys.exit()
-
-        config = ConfigFile(argv[1])
+        config = ConfigFile(path_config)
 
         # Process the config file
-        parameters = {}
+        parameters: dict[str, Any] = {}
 
         parameters["GridSpacing"] = 1.0  # default
         parameters["PointsIncludeRegions"] = []
@@ -1489,6 +1452,16 @@ class RunPOVME:
         ]
 
         for entity in config.entities:
+            if entity[0] == "PDBFILENAME":
+                if path_pdb is not None:
+                    entity[1] = path_pdb
+
+            if entity[0] == "OUTPUTFILENAMEPREFIX":
+                if output_prefix is not None:
+                    if output_prefix[-1] != "/":
+                        output_prefix += "/"
+                    entity[1] = output_prefix
+
             try:
                 index = [p.upper() for p in float_parameters].index(entity[0])
                 parameters[float_parameters[index]] = float(entity[1])
@@ -1601,7 +1574,7 @@ class RunPOVME:
         log("", parameters)
 
         # create temp swap directory if needed
-        if parameters["UseDiskNotMemory"] == True:
+        if parameters["UseDiskNotMemory"]:
             if os.path.exists("./.povme_tmp"):
                 shutil.rmtree("./.povme_tmp")
             os.mkdir("./.povme_tmp")
@@ -1657,7 +1630,7 @@ class RunPOVME:
                 pts = numpy.delete(pts, index_to_remove, axis=0)
 
             # save the points as PDB
-            if parameters["SavePoints"] == True:
+            if parameters["SavePoints"]:
 
                 # First, save the point field itself
 
@@ -1665,7 +1638,7 @@ class RunPOVME:
 
                 points_filename = parameters["OutputFilenamePrefix"] + "point_field.pdb"
 
-                if parameters["CompressOutput"] == True:
+                if parameters["CompressOutput"]:
                     afile = gzopenfile(points_filename + ".gz", "wb")
                 else:
                     afile = openfile(points_filename, "w")
@@ -1715,7 +1688,7 @@ class RunPOVME:
                         + "contiguous_pocket_seed_points.pdb"
                     )
 
-                    if parameters["CompressOutput"] == True:
+                    if parameters["CompressOutput"]:
                         afile = gzopenfile(points_filename + ".gz", "wb")
                     else:
                         afile = openfile(points_filename, "w")
@@ -1763,7 +1736,7 @@ class RunPOVME:
             )
 
             # delete the temp swap directory if necessary
-            if parameters["UseDiskNotMemory"] == True:
+            if parameters["UseDiskNotMemory"]:
                 if os.path.exists("./.povme_tmp"):
                     shutil.rmtree("./.povme_tmp")
 
@@ -1784,8 +1757,8 @@ class RunPOVME:
             log("", parameters)
 
             # if the user requested a separate volume file, save that as well
-            if parameters["SaveTabbedVolumeFile"] == True:
-                if parameters["CompressOutput"] == True:
+            if parameters["SaveTabbedVolumeFile"]:
+                if parameters["CompressOutput"]:
                     f = gzopenfile(
                         parameters["OutputFilenamePrefix"] + "volumes.tabbed.txt.gz",
                         "wb",
@@ -1806,8 +1779,8 @@ class RunPOVME:
 
             # if the user wanted a single trajectory containing all the
             # volumes, generate that here.
-            if parameters["SavePocketVolumesTrajectory"] == True:
-                if parameters["CompressOutput"] == True:
+            if parameters["SavePocketVolumesTrajectory"]:
+                if parameters["CompressOutput"]:
                     traj_file = gzopenfile(
                         parameters["OutputFilenamePrefix"] + "volume_trajectory.pdb.gz",
                         "wb",
@@ -1819,7 +1792,7 @@ class RunPOVME:
                     )
 
                 for frame_index in range(1, len(list(results_dic.keys())) + 1):
-                    if parameters["CompressOutput"] == True:
+                    if parameters["CompressOutput"]:
                         frame_file = gzopenfile(
                             parameters["OutputFilenamePrefix"]
                             + "frame_"
@@ -1843,7 +1816,7 @@ class RunPOVME:
 
             # if the user requested a volumetric density map, then generate it
             # here
-            if parameters["SaveVolumetricDensityMap"] == True:
+            if parameters["SaveVolumetricDensityMap"]:
                 unique_points = {}
 
                 overall_min = numpy.ones(3) * 1e100
@@ -1918,26 +1891,4 @@ class RunPOVME:
                     # import cPickle as pickle
                     # pickle.dump(all_pts, open('dill.pickle', 'w'))
 
-        # If running in testing mode, make sure things look alright.
-        if testing_mode:
-            import glob
-
-            expected_vols = set([1673.0, 1493.0, 1711.0, 1854.0, 2023.0])
-            actual_vols = set(results_dic.values())
-            if len(actual_vols - expected_vols) > 0:
-                raise Exception(
-                    "Expected volumes to be "
-                    + str(expected_vols)
-                    + ", but got "
-                    + str(actual_vols)
-                )
-            num_output_files = len(glob.glob("POVME_test_run/*"))
-            if num_output_files != 12:
-                raise Exception(
-                    "Expected 12 output files, but got " + str(num_output_files)
-                )
-
-            # Remove testing directory.
-            delete_testing_dir()
-
-            test_passed()
+        self.results = results_dic

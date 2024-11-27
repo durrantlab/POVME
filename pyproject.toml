@@ -17,6 +17,7 @@ dependencies = [
 ]
 
 [project.scripts]
+povme = "povme.cli:povme_cli"
 
 [build-system]
 requires = ["setuptools"]

@@ -1,21 +1,6 @@
-# POVME 2.2.2 is released under the GNU General Public License (see
-# http://www.gnu.org/licenses/gpl.html). If you have any questions, comments,
-# or suggestions, please don't hesitate to contact me, Jacob Durrant, at
-# durrantj [at] pitt [dot] edu.
-#
-# If you use POVME in your work, please cite:
-#
-#    Durrant, J. D., C. A. de Oliveira, et al. (2011). "POVME: An algorithm
-#    for measuring binding-pocket volumes." J Mol Graph Model 29(5): 773-776.
-#
-#    Durrant, J. D., L. Votapka, et al. (2014). "Povme 2.0: An Enhanced Tool
-#    for Determining Pocket Shape and Volume Characteristics." J Chem Theory
-#    Comput 10.11: 5047-56.
-
-from pathlib import Path
 import gzip
 import os
-import shutil
+from pathlib import Path
 
 try:
     from pathlib import WindowsPath as WinPath
@@ -33,7 +18,7 @@ def fix_filename(path, must_exist=True):
     formatted.
 
     path -- A string, the path.
-    must_exist -- A boolean, whether to use file existance in determining which
+    must_exist -- A boolean, whether to use file existence in determining which
         path to use.
 
     Returns:
@@ -89,43 +74,3 @@ def gzopenfile(path, mode="r"):
     The file object.
     """
     return gzip.open(fix_filename(path, "r" in mode), mode)
-
-
-def setup_testing_dir(files_to_copy_relative_to__file__):
-    """Create a temporary directory.
-
-    files_to_copy_relative_to__file__ -- A list of files to copy, relative to
-        the python file calling this function.
-    """
-
-    # Create a temporary directory.
-    test_dir = "./testing.tmp/"
-    if os.path.exists(test_dir):
-        raise IOError("Delete " + test_dir + " before running the test.")
-    os.mkdir(test_dir)
-
-    # Copy example files to this directory.
-    for fl in files_to_copy_relative_to__file__:
-        shutil.copy2(os.path.dirname(__file__) + fl, test_dir)
-
-    # Change into testing directory.
-    os.chdir(test_dir)
-
-
-def delete_testing_dir():
-    """Assuming you are already in the temporary directory, this will delete
-    it."""
-
-    # Assumes you are already in the temporary directory.
-    os.chdir("..")
-    shutil.rmtree("./testing.tmp/")
-
-
-def test_passed():
-    """Shows a message saying that a test passed."""
-
-    print("")
-    print("-----------------")
-    print("Passed all tests!")
-    print("-----------------")
-    print("")

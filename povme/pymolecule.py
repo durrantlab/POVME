@@ -1,41 +1,18 @@
-"""pymolecule is free software: you can redistribute it and/or modify
-    it under the terms of the GNU General Public License as published by the
-    Free Software Foundation, either version 3 of the License, or (at your
-    option) any later version.
+from typing import Any
 
-    pymolecule is distributed in the hope that it will be useful, but WITHOUT
-    ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or
-    FITNESS FOR A PARTICULAR PURPOSE.  See the GNU General Public License for
-    more details.
-
-    You should have received a copy of the GNU General Public License along
-    with this program.  If not, see <http://www.gnu.org/licenses/>.
-
-    Copyright 2011 Jacob D. Durrant. If you have any questions, comments, or
-    suggestions, please don't hesitate to contact me at durrantj [at] pitt
-    [dot] edu.
-
-    The latest version of pymolecule can be downloaded from
-    http://sourceforge.net/projects/autoclickchem/
-
-    If you use pymolecule in your work, please cite [REFERENCE HERE]"""
-
-"""Note: This is a beta version of pymolecule. Not intended for distribution
-    independent of POVME 2.2.2!!!"""
-
-
-import os
-import itertools
-import numpy
-import numpy.linalg
-from numpy.lib.recfunctions import append_fields
-from scipy.spatial.distance import pdist
-from scipy.spatial.distance import cdist
-import scipy
 import copy
-import sys
+import itertools
+import os
 import pickle as pickle
 import shutil
+import sys
+
+import numpy
+import numpy.linalg
+import scipy
+from numpy.lib.recfunctions import append_fields
+from scipy.spatial.distance import cdist, pdist
+
 from .common import openfile
 
 version = "beta"
@@ -51,15 +28,15 @@ class Information:
     def __init__(self, parent_molecule_object):
         """Initializes the pymolecule.Information class.
 
-            Arguments:
-            parent_molecule_object -- The pymolecule.Molecule object
-                associated with this class.
+        Arguments:
+        parent_molecule_object -- The pymolecule.Molecule object
+            associated with this class.
 
-            """
+        """
 
         self.parent_molecule = parent_molecule_object
 
-        self.constants = {}
+        self.constants: dict[str, Any] = {}
         self.constants["element_names_with_two_letters"] = [
             b"BR",
             b"CL",
@@ -355,7 +332,7 @@ class Information:
             Returns:
             A boolean. True if part of protein, False if not.
 
-            """
+        """
 
         # this function is retained for legacy reasons. past versions of pymolecule had
         # this functionality.
@@ -370,13 +347,13 @@ class Information:
     def belongs_to_dna(self, atom_index):
         """Checks if the atom is part of DNA.
 
-            Arguments:
-            atom_index -- An int, the index of the atom to consider.
+        Arguments:
+        atom_index -- An int, the index of the atom to consider.
 
-            Returns:
-            A boolean. True if part of dna, False if not.
+        Returns:
+        A boolean. True if part of dna, False if not.
 
-            """
+        """
 
         # this function is retained for legacy reasons. past versions of pymolecule had
         # this functionality.
@@ -391,13 +368,13 @@ class Information:
     def belongs_to_rna(self, atom_index):
         """Checks if the atom is part of RNA.
 
-            Arguments:
-            atom_index -- An int, the index of the atom to consider.
+        Arguments:
+        atom_index -- An int, the index of the atom to consider.
 
-            Returns:
-            A boolean. True if part of rna, False if not.
+        Returns:
+        A boolean. True if part of rna, False if not.
 
-            """
+        """
 
         # this function is retained for legacy reasons. past versions of pymolecule had
         # this functionality.
@@ -508,17 +485,17 @@ class Information:
     def center_of_mass(self, selection=None):
         """Determines the center of mass.
 
-            Arguments:
-            selection -- An optional numpy.array containing the indices of the
-                atoms to consider when calculating the center of mass. If
-                ommitted, all atoms of the pymolecule.Molecule object will be
-                considered.
+        Arguments:
+        selection -- An optional numpy.array containing the indices of the
+            atoms to consider when calculating the center of mass. If
+            ommitted, all atoms of the pymolecule.Molecule object will be
+            considered.
 
-            Returns:
-            A numpy.array containing to the x, y, and z coordinates of the
-                center of mass.
+        Returns:
+        A numpy.array containing to the x, y, and z coordinates of the
+            center of mass.
 
-            """
+        """
 
         if selection is None:
             selection = self.parent_molecule.selections.select_all()
@@ -551,17 +528,17 @@ class Information:
     def geometric_center(self, selection=None):
         """Determines the geometric center.
 
-            Arguments:
-            selection -- An optional numpy.array containing the indices of the
-                atoms to consider when calculating the geometric center. If
-                ommitted, all atoms of the pymolecule.Molecule object will be
-                considered.
+        Arguments:
+        selection -- An optional numpy.array containing the indices of the
+            atoms to consider when calculating the geometric center. If
+            ommitted, all atoms of the pymolecule.Molecule object will be
+            considered.
 
-            Returns:
-            A numpy.array containing to the x, y, and z coordinates of the
-                geometric center.
+        Returns:
+        A numpy.array containing to the x, y, and z coordinates of the
+            geometric center.
 
-            """
+        """
 
         if selection is None:
             selection = self.parent_molecule.selections.select_all()
@@ -573,15 +550,15 @@ class Information:
     def total_mass(self, selection=None):
         """Calculates the total atomic mass.
 
-            Arguments:
-            selection -- An optional numpy.array containing the indices of the
-                atoms to consider when calculating the total mass. If ommitted,
-                all atoms of the pymolecule.Molecule object will be considered.
+        Arguments:
+        selection -- An optional numpy.array containing the indices of the
+            atoms to consider when calculating the total mass. If ommitted,
+            all atoms of the pymolecule.Molecule object will be considered.
 
-            Returns:
-            A double, the total mass.
+        Returns:
+        A double, the total mass.
 
-            """
+        """
 
         if selection is None:
             selection = self.parent_molecule.selections.select_all()
@@ -595,15 +572,15 @@ class Information:
     def total_number_of_atoms(self, selection=None):
         """Counts the number of atoms.
 
-            Arguments:
-            selection -- An optional numpy.array containing the indices of the
-                atoms to count. If ommitted, all atoms of the
-                pymolecule.Molecule object will be considered.
+        Arguments:
+        selection -- An optional numpy.array containing the indices of the
+            atoms to count. If ommitted, all atoms of the
+            pymolecule.Molecule object will be considered.
 
-            Returns:
-            An int, the total number of atoms.
+        Returns:
+        An int, the total number of atoms.
 
-            """
+        """
 
         if selection is None:
             selection = self.parent_molecule.selections.select_all()
@@ -625,7 +602,7 @@ class Information:
             Returns:
             An int, the total number of heavy (non-hydrogen) atoms.
 
-            """
+        """
 
         # get the indices of all hydrogen atoms
         all_hydrogens = self.parent_molecule.selections.select_atoms(
@@ -636,18 +613,18 @@ class Information:
     def bounding_box(self, selection=None, padding=0.0):
         """Calculates a box that bounds (encompasses) a set of atoms.
 
-            Arguments:
-            selection -- An optional numpy.array containing the indices of the
-                atoms to consider. If ommitted, all atoms of the
-                pymolecule.Molecule object will be considered.
-            padding -- An optional float. The bounding box will extend this
-                many angstroms beyond the atoms being considered.
+        Arguments:
+        selection -- An optional numpy.array containing the indices of the
+            atoms to consider. If ommitted, all atoms of the
+            pymolecule.Molecule object will be considered.
+        padding -- An optional float. The bounding box will extend this
+            many angstroms beyond the atoms being considered.
 
-            Returns:
-            A numpy array representing two 3D points, (min_x, max_x, min_y)
-                and (max_y, min_z, max_z), that bound the molecule.
+        Returns:
+        A numpy array representing two 3D points, (min_x, max_x, min_y)
+            and (max_y, min_z, max_z), that bound the molecule.
 
-            """
+        """
 
         if selection is None:
             selection = self.parent_molecule.selections.select_all()
@@ -675,7 +652,7 @@ class Information:
                 representing a 3D point, the (x, y, z) center of the sphere.
                 The second is a float, the radius of the sphere.
 
-            """
+        """
 
         if selection is None:
             selection = self.parent_molecule.selections.select_all()
@@ -710,35 +687,43 @@ class Information:
 
         # do calcs for the whole molcules
         whole_mol_calc = self.bounding_sphere()
-        self.parent_molecule.information.hierarchy["spheres"]["molecule"][
-            "center"
-        ] = numpy.array([whole_mol_calc[0]])
-        self.parent_molecule.information.hierarchy["spheres"]["molecule"][
-            "radius"
-        ] = whole_mol_calc[1]
+        self.parent_molecule.information.hierarchy["spheres"]["molecule"]["center"] = (
+            numpy.array([whole_mol_calc[0]])
+        )
+        self.parent_molecule.information.hierarchy["spheres"]["molecule"]["radius"] = (
+            whole_mol_calc[1]
+        )
 
         # do calcs for the chains
-        self.parent_molecule.information.hierarchy["spheres"]["chains"][
-            "keys"
-        ] = numpy.array(
-            list(self.parent_molecule.information.hierarchy["chains"]["indices"].keys())
+        self.parent_molecule.information.hierarchy["spheres"]["chains"]["keys"] = (
+            numpy.array(
+                list(
+                    self.parent_molecule.information.hierarchy["chains"][
+                        "indices"
+                    ].keys()
+                )
+            )
         )
-        self.parent_molecule.information.hierarchy["spheres"]["chains"][
-            "centers"
-        ] = numpy.empty(
-            (
+        self.parent_molecule.information.hierarchy["spheres"]["chains"]["centers"] = (
+            numpy.empty(
+                (
+                    len(
+                        self.parent_molecule.information.hierarchy["spheres"]["chains"][
+                            "keys"
+                        ]
+                    ),
+                    3,
+                )
+            )
+        )
+        self.parent_molecule.information.hierarchy["spheres"]["chains"]["radii"] = (
+            numpy.empty(
                 len(
                     self.parent_molecule.information.hierarchy["spheres"]["chains"][
                         "keys"
                     ]
-                ),
-                3,
+                )
             )
-        )
-        self.parent_molecule.information.hierarchy["spheres"]["chains"][
-            "radii"
-        ] = numpy.empty(
-            len(self.parent_molecule.information.hierarchy["spheres"]["chains"]["keys"])
         )
 
         for index, chainid in enumerate(
@@ -763,32 +748,34 @@ class Information:
             ] = asphere[1]
 
         # do calcs for the residues
-        self.parent_molecule.information.hierarchy["spheres"]["residues"][
-            "keys"
-        ] = numpy.array(
-            list(
-                self.parent_molecule.information.hierarchy["residues"]["indices"].keys()
+        self.parent_molecule.information.hierarchy["spheres"]["residues"]["keys"] = (
+            numpy.array(
+                list(
+                    self.parent_molecule.information.hierarchy["residues"][
+                        "indices"
+                    ].keys()
+                )
             )
         )
-        self.parent_molecule.information.hierarchy["spheres"]["residues"][
-            "centers"
-        ] = numpy.empty(
-            (
+        self.parent_molecule.information.hierarchy["spheres"]["residues"]["centers"] = (
+            numpy.empty(
+                (
+                    len(
+                        self.parent_molecule.information.hierarchy["spheres"][
+                            "residues"
+                        ]["keys"]
+                    ),
+                    3,
+                )
+            )
+        )
+        self.parent_molecule.information.hierarchy["spheres"]["residues"]["radii"] = (
+            numpy.empty(
                 len(
                     self.parent_molecule.information.hierarchy["spheres"]["residues"][
                         "keys"
                     ]
-                ),
-                3,
-            )
-        )
-        self.parent_molecule.information.hierarchy["spheres"]["residues"][
-            "radii"
-        ] = numpy.empty(
-            len(
-                self.parent_molecule.information.hierarchy["spheres"]["residues"][
-                    "keys"
-                ]
+                )
             )
         )
 
@@ -827,7 +814,7 @@ class Information:
                 sp2 hybridization, 1 corresponds to sp1 hybridization, and -1
                 means not enough information.
 
-            """
+        """
 
         # This is retained for legacy reasons. older versions of pymolecule
         # included a similar function. Generally, I'd like to include only the
@@ -894,11 +881,11 @@ class FileIO:
     def __init__(self, parent_molecule_object):
         """Initializes the pymolecule.FileIO class.
 
-            Arguments:
-            parent_molecule_object -- The pymolecule.Molecule object
-                associated with this class.
+        Arguments:
+        parent_molecule_object -- The pymolecule.Molecule object
+            associated with this class.
 
-            """
+        """
 
         self.parent_molecule = parent_molecule_object
 
@@ -909,7 +896,7 @@ class FileIO:
             Arguments:
             filename -- A string, the filename of the pym file.
 
-            """
+        """
 
         if filename[-1:] != "/":
             filename = filename + "/"
@@ -966,7 +953,7 @@ class FileIO:
             resseq_reindex -- An optional boolean, whether or not to reindex
                 the pdb resseq field. False by default.
 
-            """
+        """
 
         self.parent_molecule.information.filename = filename
 
@@ -999,7 +986,7 @@ class FileIO:
             resseq_reindex -- An optional boolean, whether or not to reindex
                 the pdb resseq field. False by default.
 
-            """
+        """
 
         source_data = numpy.genfromtxt(
             file_obj,
@@ -1031,7 +1018,7 @@ class FileIO:
         for index in remark_indices:
             astr = ""
             for name in source_data.dtype.names[1:]:
-                astr = astr + source_data[name][index].decode('utf-8')
+                astr = astr + source_data[name][index].decode("utf-8")
             self.parent_molecule.information.remarks.append(astr.rstrip())
 
         if source_data.ndim == 0:
@@ -1075,13 +1062,15 @@ class FileIO:
             )
             descr[index] = (descr[index][0], "f8")
         new_types = numpy.dtype(descr)
-        self.parent_molecule.information.atom_information = self.parent_molecule.information.atom_information.astype(
-            new_types
+        self.parent_molecule.information.atom_information = (
+            self.parent_molecule.information.atom_information.astype(new_types)
         )
 
         # remove some of the fields that just contain empty data
-        self.parent_molecule.information.atom_information = self.parent_molecule.numpy_structured_array_remove_field(
-            self.parent_molecule.information.atom_information, ["empty", "empty2"]
+        self.parent_molecule.information.atom_information = (
+            self.parent_molecule.numpy_structured_array_remove_field(
+                self.parent_molecule.information.atom_information, ["empty", "empty2"]
+            )
         )
 
         # the coordinates need to be placed in their own special numpy array
@@ -1095,7 +1084,7 @@ class FileIO:
         ).T
         self.parent_molecule.information.atom_information = self.parent_molecule.numpy_structured_array_remove_field(
             self.parent_molecule.information.atom_information,
-            ["x", "y", "z"]
+            ["x", "y", "z"],
             # now remove the coordinates from the atom_information object to
             # save memory
         )
@@ -1150,7 +1139,7 @@ class FileIO:
             for index in conect_indices:
                 astr = ""
                 for name in source_data.dtype.names[1:]:
-                    astr = astr + source_data[name][index].decode('utf-8')
+                    astr = astr + source_data[name][index].decode("utf-8")
                 astr = astr.rstrip()
 
                 indices = []
@@ -1201,7 +1190,7 @@ class FileIO:
             save_coordinates_undo_point -- An optional boolean, whether or not
                 to save the last coordinate undo point. False by default.
 
-            """
+        """
 
         # Why not just pickle self.parent.information? Because it's a huge
         # file, can't selectively not save bonds, for example, and numpy.save
@@ -1300,7 +1289,7 @@ class FileIO:
             If return_text is True, a PDB-formatted string. Otherwise, returns
                 nothing.
 
-            """
+        """
 
         # so the pdb is not empty (if it is empty, don't save)
         if len(self.parent_molecule.information.atom_information) > 0:
@@ -1553,11 +1542,11 @@ class AtomsAndBonds:
     def __init__(self, parent_molecule_object):
         """Initializes the pymolecule.AtomsAndBonds class.
 
-            Arguments:
-            parent_molecule_object -- The pymolecule.Molecule object
-                associated with this class.
+        Arguments:
+        parent_molecule_object -- The pymolecule.Molecule object
+            associated with this class.
 
-            """
+        """
 
         self.parent_molecule = parent_molecule_object
 
@@ -1574,7 +1563,7 @@ class AtomsAndBonds:
             delete_excessive_bonds -- An optional boolean, whether or not to
                 check for and delete excessive bonds. True by default.
 
-            """
+        """
 
         # create/recreate the bond array if needed
         if (
@@ -1658,8 +1647,10 @@ class AtomsAndBonds:
                 element = self.parent_molecule.information.atom_information[
                     "element_stripped"
                 ][index]
-                bond_partner_indices = self.parent_molecule.selections.select_all_atoms_bound_to_selection(
-                    numpy.array([index])
+                bond_partner_indices = (
+                    self.parent_molecule.selections.select_all_atoms_bound_to_selection(
+                        numpy.array([index])
+                    )
                 )
                 number_of_bonds = len(bond_partner_indices)
 
@@ -1681,11 +1672,11 @@ class AtomsAndBonds:
                         # populate the ideal-bond-length vector
                         for t in range(len(bond_partner_indices)):
                             index_partner = bond_partner_indices[t]
-                            element_partner = self.parent_molecule.information.atom_information[
-                                "element_stripped"
-                            ][
-                                index_partner
-                            ]
+                            element_partner = (
+                                self.parent_molecule.information.atom_information[
+                                    "element_stripped"
+                                ][index_partner]
+                            )
                             ideal_dists[t] = self.parent_molecule.information.constants[
                                 "bond_length_dict"
                             ][element + "-" + element_partner]
@@ -1728,15 +1719,17 @@ class AtomsAndBonds:
             Returns:
             An int, the number of neighboring atoms of the specified element.
 
-            """
+        """
 
         # this function is really here for historical reasons. it's similar to
         # the old number_of_neighors_of_element function. it could be done
         # pretty easily with numpy
 
         the_element = the_element.strip()
-        bond_partners_selection = self.parent_molecule.selections.select_all_atoms_bound_to_selection(
-            numpy.array([atom_index])
+        bond_partners_selection = (
+            self.parent_molecule.selections.select_all_atoms_bound_to_selection(
+                numpy.array([atom_index])
+            )
         )
         elements = self.parent_molecule.information.atom_information[
             "element_stripped"
@@ -1756,15 +1749,17 @@ class AtomsAndBonds:
             An int, the index of the first neighbor atom of the specified
                 element. If no such neighbor exists, returns -1.
 
-            """
+        """
 
         # this function is really here for historical reasons. it's similar to
         # the old index_of_neighbor_of_element function. it could be done
         # pretty easily with numpy
 
         the_element = the_element.strip()
-        bond_partners_selection = self.parent_molecule.selections.select_all_atoms_bound_to_selection(
-            numpy.array([atom_index])
+        bond_partners_selection = (
+            self.parent_molecule.selections.select_all_atoms_bound_to_selection(
+                numpy.array([atom_index])
+            )
         )
         elements = self.parent_molecule.information.atom_information[
             "element_stripped"
@@ -1774,11 +1769,11 @@ class AtomsAndBonds:
     def delete_bond(self, index1, index2):
         """Deletes a bond.
 
-            Arguments:
-            index1 -- An int, the index of the first atom of the bonded pair.
-            index2 -- An int, the index of the second atom of the bonded pair.
+        Arguments:
+        index1 -- An int, the index of the first atom of the bonded pair.
+        index2 -- An int, the index of the second atom of the bonded pair.
 
-            """
+        """
 
         self.parent_molecule.information.bonds[index1][index2] = 0
         self.parent_molecule.information.bonds[index2][index1] = 0
@@ -1786,12 +1781,12 @@ class AtomsAndBonds:
     def add_bond(self, index1, index2, order=1):
         """Adds a bond.
 
-            Arguments:
-            index1 -- An int, the index of the first atom of the bonded pair.
-            index2 -- An int, the index of the second atom of the bonded pair.
-            order -- An optional int, the order of the bond. 1 by default.
+        Arguments:
+        index1 -- An int, the index of the first atom of the bonded pair.
+        index2 -- An int, the index of the second atom of the bonded pair.
+        order -- An optional int, the order of the bond. 1 by default.
 
-            """
+        """
 
         self.parent_molecule.information.bonds[index1][index2] = order
         self.parent_molecule.information.bonds[index2][index1] = order
@@ -1799,10 +1794,10 @@ class AtomsAndBonds:
     def delete_atom(self, index):
         """Deletes an atom.
 
-            Arguments:
-            index -- An int, the index of the atom to delete.
+        Arguments:
+        index -- An int, the index of the atom to delete.
 
-            """
+        """
 
         # remove the atom information
         self.parent_molecule.information.atom_information = numpy.delete(
@@ -1847,31 +1842,31 @@ class AtomsAndBonds:
     ):
         """Adds an atom.
 
-            Arguments:
-            record_name -- An optional string, the record name of the atom.
-                "ATOM" is the default.
-            serial -- An optional int, the serial field of the atom. 1 is the
-                default.
-            name -- An optional string, the name of the atom. "X" is the
-                default.
-            resname -- An optional string, the resname of the atom. "XXX" is
-                the default.
-            chainid -- An optional string, chainid of the atom. "X" is the
-                default.
-            resseq -- An optional int, the resseq field of the atom. 1 is the
-                default.
-            occupancy -- An optional float, the occupancy of the atom. 0.0 is
-                the default.
-            tempfactor -- An optional float, the tempfactor of the atom. 0.0
-                is the default.
-            charge -- An optional string, the charge of the atom. "" is the
-                default.
-            element -- An optional string, the element of the atom. "X" is the
-                default.
-            coordinates -- An optional numpy.array, the (x, y, z) coordinates
-                of the atom. numpy.array([0.0, 0.0, 0.0]) is the default.
+        Arguments:
+        record_name -- An optional string, the record name of the atom.
+            "ATOM" is the default.
+        serial -- An optional int, the serial field of the atom. 1 is the
+            default.
+        name -- An optional string, the name of the atom. "X" is the
+            default.
+        resname -- An optional string, the resname of the atom. "XXX" is
+            the default.
+        chainid -- An optional string, chainid of the atom. "X" is the
+            default.
+        resseq -- An optional int, the resseq field of the atom. 1 is the
+            default.
+        occupancy -- An optional float, the occupancy of the atom. 0.0 is
+            the default.
+        tempfactor -- An optional float, the tempfactor of the atom. 0.0
+            is the default.
+        charge -- An optional string, the charge of the atom. "" is the
+            default.
+        element -- An optional string, the element of the atom. "X" is the
+            default.
+        coordinates -- An optional numpy.array, the (x, y, z) coordinates
+            of the atom. numpy.array([0.0, 0.0, 0.0]) is the default.
 
-            """
+        """
 
         # add the atom information
 
@@ -1996,32 +1991,32 @@ class Selections:
     def __init__(self, parent_molecule_object):
         """Initializes the pymolecule.Selections class.
 
-            Arguments:
-            parent_molecule_object -- The pymolecule.Molecule object associated
-                with this class.
+        Arguments:
+        parent_molecule_object -- The pymolecule.Molecule object associated
+            with this class.
 
-            """
+        """
 
         self.parent_molecule = parent_molecule_object
 
     def select_atoms(self, selection_criteria):
         """Select a set of atoms based on user-specified criteria.
 
-            Arguments:
-            selection_criteria -- An dictionary, where the keys correspond to
-                keys in the self.parent_molecule.information.atom_information
-                structured numpy array, and the values are lists of acceptable
-                matches. The selection is a logical "AND" between dictionary
-                entries, but "OR" within the value lists themselves. For
-                example: {'atom':['CA','O'], 'chain':'A', 'resname':'PRO'}
-                would select all atoms with the names CA or O that are located
-                in the PRO residues of chain A.
+        Arguments:
+        selection_criteria -- An dictionary, where the keys correspond to
+            keys in the self.parent_molecule.information.atom_information
+            structured numpy array, and the values are lists of acceptable
+            matches. The selection is a logical "AND" between dictionary
+            entries, but "OR" within the value lists themselves. For
+            example: {'atom':['CA','O'], 'chain':'A', 'resname':'PRO'}
+            would select all atoms with the names CA or O that are located
+            in the PRO residues of chain A.
 
-            Returns:
-            A numpy.array containing the indices of the atoms of the
-                selection.
+        Returns:
+        A numpy.array containing the indices of the atoms of the
+            selection.
 
-            """
+        """
 
         try:
             # start assuming everything is selected
@@ -2074,16 +2069,16 @@ class Selections:
     def select_atoms_in_bounding_box(self, bounding_box):
         """Selects all the atoms that are within a bounding box.
 
-            Arguments:
-            bounding_box -- A 2x3 numpy.array containing the minimum and
-                maximum points of the bounding box. Example:
-                numpy.array([[min_x, min_y, min_z], [max_x, max_y, max_z]]).
+        Arguments:
+        bounding_box -- A 2x3 numpy.array containing the minimum and
+            maximum points of the bounding box. Example:
+            numpy.array([[min_x, min_y, min_z], [max_x, max_y, max_z]]).
 
-            Returns:
-            A numpy.array containing the indices of the atoms that are within
-                the bounding box.
+        Returns:
+        A numpy.array containing the indices of the atoms that are within
+            the bounding box.
 
-            """
+        """
 
         min_pt = bounding_box[0]
         max_pt = bounding_box[1]
@@ -2117,17 +2112,17 @@ class Selections:
     def select_all_atoms_bound_to_selection(self, selection):
         """Selects all the atoms that are bound to a user-specified selection.
 
-            Arguments:
-            selection -- A numpy.array containing the indices of the
-                user-specified selection.
+        Arguments:
+        selection -- A numpy.array containing the indices of the
+            user-specified selection.
 
-            Returns:
-            A numpy.array containing the indices of the atoms that are bound
-                to the user-specified selection. Note that this new selection
-                does not necessarily include the indices of the original
-                user-specified selection.
+        Returns:
+        A numpy.array containing the indices of the atoms that are bound
+            to the user-specified selection. Note that this new selection
+            does not necessarily include the indices of the original
+            user-specified selection.
 
-            """
+        """
 
         if self.parent_molecule.information.bonds is None:
             print(
@@ -2198,8 +2193,10 @@ class Selections:
             except:
                 break  # this error because you've reached the end of the larger molecule
 
-            neighbors_indices = self.parent_molecule.selections.select_all_atoms_bound_to_selection(
-                numpy.array([current_atom_index])
+            neighbors_indices = (
+                self.parent_molecule.selections.select_all_atoms_bound_to_selection(
+                    numpy.array([current_atom_index])
+                )
             )
 
             # get the ones in neighbors_indices that are not in
@@ -2226,7 +2223,7 @@ class Selections:
             A numpy.array containing the indices of the atoms belonging to the
                 same molecules as the atoms of the user-defined selection.
 
-            """
+        """
 
         # If your "Molecule" object actually contains several molecules, this
         # one selects all the atoms from any molecule containing any atom in
@@ -2262,8 +2259,10 @@ class Selections:
                 except:
                     break  # this error because you've reached the end of the larger molecule
 
-                neighbors_indices = self.parent_molecule.selections.select_all_atoms_bound_to_selection(
-                    numpy.array([current_atom_index])
+                neighbors_indices = (
+                    self.parent_molecule.selections.select_all_atoms_bound_to_selection(
+                        numpy.array([current_atom_index])
+                    )
                 )
 
                 # get the ones in neighbors_indices that are not in
@@ -2293,7 +2292,7 @@ class Selections:
                 atoms belonging to each molecule of the composite
                 pymolecule.Molecule object.
 
-            """
+        """
 
         # If your pymolecule.Molecule object contains multiple molecules
         # (e.g., several chains), this will return a list of selections
@@ -2333,7 +2332,7 @@ class Selections:
                     user-defined selection, not including the atoms of the
                     user-defined selection themselves.
 
-            """
+        """
 
         # note that this does not return a selection that includes the input
         # selection. merge selections as required to get a selection that also
@@ -2364,7 +2363,7 @@ class Selections:
             A numpy.array containing the indices of all atoms in the same
                 residue as any of the atoms of the user-defined selection.
 
-            """
+        """
 
         # get string ids representing the residues of all atoms
         keys = numpy.char.add(
@@ -2415,7 +2414,7 @@ class Selections:
             A numpy.array containing the indices of all atoms that are not in
                 the user-defined seleciton.
 
-            """
+        """
 
         # selection is a list of atom indices
         all_atoms = numpy.arange(
@@ -2427,11 +2426,11 @@ class Selections:
     def select_all(self):
         """Selects all the atoms in a pymolecule.Molecule object.
 
-            Returns:
-            A numpy.array containing the indices of all atoms in the
-                pymolecule.Molecule object.
+        Returns:
+        A numpy.array containing the indices of all atoms in the
+            pymolecule.Molecule object.
 
-            """
+        """
 
         return self.select_atoms({})
 
@@ -2457,7 +2456,7 @@ class Selections:
                 containing the indices of all nearby atoms from the other
                 molecule.
 
-            """
+        """
 
         if pairwise_comparison == True:
 
@@ -2675,19 +2674,19 @@ class Selections:
     ):
         """Creates a pymolecule.Molecule from a user-defined atom selection.
 
-            Arguments
-            selection -- A numpy.array containing the indices of the atoms in
-                the user-defined selection.
-            serial_reindex -- An optional boolean, whether or not to reindex
-                the atom serial fields. Default is True.
-            resseq_reindex -- An optional boolean, whether or not to reindex
-                the atom resseq fields. Default is False.
+        Arguments
+        selection -- A numpy.array containing the indices of the atoms in
+            the user-defined selection.
+        serial_reindex -- An optional boolean, whether or not to reindex
+            the atom serial fields. Default is True.
+        resseq_reindex -- An optional boolean, whether or not to reindex
+            the atom resseq fields. Default is False.
 
-            Returns:
-            A pymolecule.Molecule object containing the atoms of the
-                user-defined selection.
+        Returns:
+        A pymolecule.Molecule object containing the atoms of the
+            user-defined selection.
 
-            """
+        """
 
         new_mol = Molecule()
         new_mol.information.coordinates = self.parent_molecule.information.coordinates[
@@ -2697,15 +2696,15 @@ class Selections:
         # try to get the undo coordinates as well, though they may not have
         # been set
         try:
-            new_mol.information.coordinates_undo_point = self.parent_molecule.information.coordinates_undo_point[
-                selection
-            ]
+            new_mol.information.coordinates_undo_point = (
+                self.parent_molecule.information.coordinates_undo_point[selection]
+            )
         except:
             new_mol.information.coordinates_undo_point = None
 
-        new_mol.information.atom_information = self.parent_molecule.information.atom_information[
-            selection
-        ]
+        new_mol.information.atom_information = (
+            self.parent_molecule.information.atom_information[selection]
+        )
 
         if not self.parent_molecule.information.bonds is None:
             new_mol.information.bonds = self.parent_molecule.information.bonds[
@@ -2731,7 +2730,7 @@ class Selections:
             A pymolecule.Molecule, containing to the same atomic information as
                 this pymolecule.Molecule object.
 
-            """
+        """
 
         new_molecule = Molecule()
         new_molecule.information.filename = self.parent_molecule.information.filename
@@ -2768,12 +2767,12 @@ class Selections:
     def get_chain_selections(self):
         """Identifies the atom selections of each chain.
 
-            Returns:
-            A dictionary. The keys of the dictionary correspond to the
-                chainids, and the values are numpy.array objects containing the
-                indices of the associated chain atoms.
+        Returns:
+        A dictionary. The keys of the dictionary correspond to the
+            chainids, and the values are numpy.array objects containing the
+            indices of the associated chain atoms.
 
-            """
+        """
 
         # so it hasn't already been calculated
         if not "chains" in list(self.parent_molecule.information.hierarchy.keys()):
@@ -2795,13 +2794,13 @@ class Selections:
     def get_residue_selections(self):
         """Identifies the atom selections of each residue.
 
-            Returns:
-            A dictionary. The keys of this dictionary correspond to the unique
-                resname-resseq-chainid residue identifiers, and the values are
-                numpy.array objects containing the indices of the associated
-                residue atoms.
+        Returns:
+        A dictionary. The keys of this dictionary correspond to the unique
+            resname-resseq-chainid residue identifiers, and the values are
+            numpy.array objects containing the indices of the associated
+            residue atoms.
 
-            """
+        """
 
         # so it hasn't already been calculated
         if not "residues" in list(self.parent_molecule.information.hierarchy.keys()):
@@ -2855,11 +2854,11 @@ class Manipulation:
     def __init__(self, parent_molecule_object):
         """Initializes the pymolecule.Manipulation class.
 
-            Arguments:
-            parent_molecule_object -- The pymolecule.Molecule object associated
-                with this class.
+        Arguments:
+        parent_molecule_object -- The pymolecule.Molecule object associated
+            with this class.
 
-            """
+        """
 
         self.parent_molecule = parent_molecule_object
 
@@ -2892,7 +2891,7 @@ class Manipulation:
             Returns: A numpy.array specifying the (delta_x, delta_y, delta_z)
                 vector by which the pmolecule.Molecule was translated.
 
-            """
+        """
 
         if new_location.shape == (3,):
             new_location = numpy.array([new_location])
@@ -2988,7 +2987,7 @@ class Manipulation:
                 end of the line segment.
             rotate -- A float, the angle of rotation, in radians.
 
-            """
+        """
 
         if line_point1.shape == (1, 3):
             line_point1 = line_point1[0]
@@ -3095,7 +3094,7 @@ class Manipulation:
                 other end of the line segment.
             rotate -- A float, the angle of rotation, in radians.
 
-            """
+        """
 
         pt1 = self.parent_molecule.information.coordinates[line_point1_index]
         pt2 = self.parent_molecule.information.coordinates[line_point2_index]
@@ -3110,17 +3109,17 @@ class Manipulation:
     def rotate_molecule_around_pivot_point(self, pivot, thetax, thetay, thetaz):
         """Rotate the molecular model around a specified atom.
 
-            Arguments:
-            pivot -- A numpy.array, the (x, y, z) coordinate about which the
-                molecular model will be rotated.
-            thetax -- A float, the angle to rotate relative to the x axis, in
-                radians.
-            thetay -- A float, the angle to rotate relative to the y axis, in
-                radians.
-            thetaz -- A float, the angle to rotate relative to the z axis, in
-                radians.
+        Arguments:
+        pivot -- A numpy.array, the (x, y, z) coordinate about which the
+            molecular model will be rotated.
+        thetax -- A float, the angle to rotate relative to the x axis, in
+            radians.
+        thetay -- A float, the angle to rotate relative to the y axis, in
+            radians.
+        thetaz -- A float, the angle to rotate relative to the z axis, in
+            radians.
 
-            """
+        """
 
         if pivot.shape == (3,):
             pivot = numpy.array([pivot])
@@ -3171,17 +3170,17 @@ class Manipulation:
     def rotate_molecule_around_pivot_atom(self, pivot_index, thetax, thetay, thetaz):
         """Rotate the molecular model around a specified atom.
 
-            Arguments:
-            pivot_index -- An int, the index of the atom about which the
-                molecular model will be rotated.
-            thetax -- A float, the angle to rotate relative to the x axis, in
-                radians.
-            thetay -- A float, the angle to rotate relative to the y axis, in
-                radians.
-            thetaz -- A float, the angle to rotate relative to the z axis, in
-                radians.
+        Arguments:
+        pivot_index -- An int, the index of the atom about which the
+            molecular model will be rotated.
+        thetax -- A float, the angle to rotate relative to the x axis, in
+            radians.
+        thetay -- A float, the angle to rotate relative to the y axis, in
+            radians.
+        thetaz -- A float, the angle to rotate relative to the z axis, in
+            radians.
 
-            """
+        """
 
         pivot = self.parent_molecule.information.coordinates[pivot_index]
         self.rotate_molecule_around_pivot_point(pivot, thetax, thetay, thetaz)
@@ -3200,11 +3199,11 @@ class Geometry:
     def __init__(self, parent_molecule_object):
         """Initializes the pymolecule.Geometry class.
 
-            Arguments:
-            parent_molecule_object -- The pymolecule.Molecule object associated
-                with this class.
+        Arguments:
+        parent_molecule_object -- The pymolecule.Molecule object associated
+            with this class.
 
-            """
+        """
 
         self.parent_molecule = parent_molecule_object
 
@@ -3223,7 +3222,7 @@ class Geometry:
             Returns:
             A float containing the angle between the three points, in radians.
 
-            """
+        """
 
         vector1 = pt1 - pt2
         vector2 = pt3 - pt2
@@ -3262,7 +3261,7 @@ class Geometry:
             A float containing the dihedral angle between the four points, in
                 radians.
 
-            """
+        """
 
         b1 = pt2 - pt1
         b2 = pt3 - pt2
@@ -3278,19 +3277,19 @@ class Geometry:
     def is_planar(self, pt1, pt2, pt3, pt4, planarity_cutoff=0.2):
         """Checks whether four points (numpy.array) lie in a common plane.
 
-            Arguments:
-            pt1 -- A numpy.array (x, y, z) representing a 3D point.
-            pt2 -- A numpy.array (x, y, z) representing a 3D point.
-            pt3 -- A numpy.array (x, y, z) representing a 3D point.
-            pt4 -- A numpy.array (x, y, z) representing a 3D point.
-            planarity_cutoff -- An optional float. How much the points can
-                deviate (in Angstroms) and still be considered planar. The
-                default is 0.2.
+        Arguments:
+        pt1 -- A numpy.array (x, y, z) representing a 3D point.
+        pt2 -- A numpy.array (x, y, z) representing a 3D point.
+        pt3 -- A numpy.array (x, y, z) representing a 3D point.
+        pt4 -- A numpy.array (x, y, z) representing a 3D point.
+        planarity_cutoff -- An optional float. How much the points can
+            deviate (in Angstroms) and still be considered planar. The
+            default is 0.2.
 
-            Returns:
-            A boolean, whether the 4 points can be considered planar.
+        Returns:
+        A boolean, whether the 4 points can be considered planar.
 
-            """
+        """
 
         return self.planarity_deviation(pt1, pt2, pt3, pt4) < planarity_cutoff
 
@@ -3308,7 +3307,7 @@ class Geometry:
             A float, the minimum distance between one point and the plane
                 formed by the other three.
 
-            """
+        """
 
         # note that minimal efforts were made to "numpify" this section. It's
         # mostly legacy code.
@@ -3385,11 +3384,11 @@ class OtherMolecules:
     def __init__(self, parent_molecule_object):
         """Initializes the pymolecule.OtherMolecules class.
 
-            Arguments:
-            parent_molecule_object -- The pymolecule.Molecule object
-                associated with this class.
+        Arguments:
+        parent_molecule_object -- The pymolecule.Molecule object
+            associated with this class.
 
-            """
+        """
 
         self.parent_molecule = parent_molecule_object
 
@@ -3407,7 +3406,7 @@ class OtherMolecules:
                 atom6, other) than the tethers would be (numpy.array([1,2]),
                 numpy.array([3,6])).
 
-            """
+        """
 
         # Adapted from Itzhack Y. Bar-Itzhack. New Method for Extracting the
         # Quaternion from a Rotation Matrix. Journal of Guidance, Control, and
@@ -3502,7 +3501,7 @@ class OtherMolecules:
             A boolean.  True if steric clashes are present, False if they are
                 not.
 
-            """
+        """
 
         if (
             pairwise_comparison == True
@@ -3529,14 +3528,14 @@ class OtherMolecules:
     def merge_with_another_molecule(self, other_molecule):
         """Merges two molecular models into a single model.
 
-            Arguments:
-            other_molecule -- A molecular model (pymolecule.Molecule object).
+        Arguments:
+        other_molecule -- A molecular model (pymolecule.Molecule object).
 
-            Returns:
-            A single pymolecule.Molecule object containing the atoms of this
-                model combined with the atoms of other_molecule.
+        Returns:
+        A single pymolecule.Molecule object containing the atoms of this
+            model combined with the atoms of other_molecule.
 
-            """
+        """
 
         merged = self.parent_molecule.selections.copy()
 
@@ -3616,7 +3615,7 @@ class OtherMolecules:
             A float, the minimum distance between any two atoms of the two
                 specified molecular models (self and other_molecule).
 
-            """
+        """
 
         if pairwise_comparison == True:
             return numpy.amin(
@@ -3679,7 +3678,7 @@ class OtherMolecules:
             Returns:
             A float, the RMSD between self and other_mol.
 
-            """
+        """
 
         if len(self.parent_molecule.information.coordinates) != len(
             other_mol.information.coordinates
@@ -3698,7 +3697,7 @@ class OtherMolecules:
         other_coors_in_order = other_mol.information.coordinates[tethers[1]]
 
         delta = self_coors_in_order - other_coors_in_order
-        norm_squared = numpy.sum(delta ** 2, axis=-1)
+        norm_squared = numpy.sum(delta**2, axis=-1)
         rmsd = numpy.power(numpy.sum(norm_squared) / len(norm_squared), 0.5)
         return rmsd
 
@@ -3712,7 +3711,7 @@ class OtherMolecules:
             Returns:
             A float, the RMSD between self and other_mol.
 
-            """
+        """
 
         self_index_in_order = numpy.arange(
             0, len(self.parent_molecule.information.coordinates), 1, dtype=int
@@ -3732,13 +3731,13 @@ class Quaternion:
     def __init__(self, s, x, y, z):
         """Initializes the pymolecule.Quaternion class.
 
-            Arguments:
-            s -- ????
-            x -- ????
-            y -- ????
-            z -- ????
+        Arguments:
+        s -- ????
+        x -- ????
+        y -- ????
+        z -- ????
 
-            """
+        """
 
         self.v = numpy.zeros(4)
         self.v[0] = s
@@ -3749,10 +3748,10 @@ class Quaternion:
     def __str__(self):
         """String containing quaternion information in the form of s x y z
 
-            Returns:
-            A string, containing all information about this quaternion
+        Returns:
+        A string, containing all information about this quaternion
 
-            """
+        """
 
         return (
             ""
@@ -3778,7 +3777,7 @@ class Quaternion:
             Arguments:
             m -- A 2D numpy.array representing a pure orthogonal matrix.
 
-            """
+        """
         # Make sure m is a 3x3 array
         if m.shape[0] != 3 or m.shape[1] != 3:
             print("Could not load quaternion from matrix...size is not (3x3)")
@@ -3825,10 +3824,10 @@ class Quaternion:
     def rep_as_44_matrix(self):
         """Creates a 4x4 matrix representation of the Quaternion.
 
-            Returns:
-            A 4x4 numpy array
+        Returns:
+        A 4x4 numpy array
 
-            """
+        """
 
         n = self.normalize()
         qw = n.v[0]
@@ -3848,10 +3847,10 @@ class Quaternion:
     def to_matrix(self):
         """Converts to a normalized 3x3 matrix.
 
-            Returns:
-            A 3x3 numpy.array, corresponding to the quaternion.
+        Returns:
+        A 3x3 numpy.array, corresponding to the quaternion.
 
-            """
+        """
 
         # First normalize
         n = self.normalize()
@@ -3900,10 +3899,10 @@ class Quaternion:
     def invert(self):
         """Takes the inverse of the quaternion for "division"
 
-            Returns:
-            A Quaternion, with the values corresponding to self^-1
+        Returns:
+        A Quaternion, with the values corresponding to self^-1
 
-            """
+        """
 
         return Quaternion(self.v[0], -1 * self.v[1], -1 * self.v[2], -1 * self.v[3])
 
@@ -3928,13 +3927,13 @@ class Quaternion:
     def multiply(self, q2):
         """Multiplies two quaternions
 
-            Arguments:
-            q2 -- A quaternion, to be multiplied with self
+        Arguments:
+        q2 -- A quaternion, to be multiplied with self
 
-            Returns:
-            A Quaternion, with the values corresponding to self * q2
+        Returns:
+        A Quaternion, with the values corresponding to self * q2
 
-            """
+        """
 
         return Quaternion(
             self.v[0] * q2.v[0]
@@ -3958,10 +3957,10 @@ class Quaternion:
     def normalize(self):
         """Normalizes the quaternion.
 
-            Returns:
-            A normalized Quaternion.
+        Returns:
+        A normalized Quaternion.
 
-            """
+        """
 
         # First normalize
         n = numpy.sqrt(
@@ -3976,13 +3975,13 @@ class Quaternion:
     def scale(self, scalar):
         """Scales a quaternion.
 
-            Arguments:
-            scalar -- the value to scale the quaternion by.
+        Arguments:
+        scalar -- the value to scale the quaternion by.
 
-            Returns:
-            A Quaternion, with the values corresponding to self * scalar.
+        Returns:
+        A Quaternion, with the values corresponding to self * scalar.
 
-            """
+        """
 
         return Quaternion(
             self.v[0] * scalar,
@@ -4016,16 +4015,16 @@ class Molecule:
     def numpy_structured_array_remove_field(self, narray, field_names):
         """Removes a specific field name from a structured numpy array.
 
-            Arguments:
-            narray -- A structured numpy array.
-            field_names -- A list of strings, where each string is one of the
-                field names of narray.
+        Arguments:
+        narray -- A structured numpy array.
+        field_names -- A list of strings, where each string is one of the
+            field names of narray.
 
-            Returns:
-            A structured numpy array identical to narray, but with the field
-                names in field_names removed.
+        Returns:
+        A structured numpy array identical to narray, but with the field
+            names in field_names removed.
 
-            """
+        """
 
         # now remove the coordinates from the atom_information object to save
         # memory
@@ -4037,13 +4036,13 @@ class Molecule:
     def __is_number(self, s):
         """Determines whether or not a string represents a number.
 
-            Arguments:
-            s -- A string (e.g., "5.4").
+        Arguments:
+        s -- A string (e.g., "5.4").
 
-            Returns:
-            A boolean, whether or not the string can be represented by a float.
+        Returns:
+        A boolean, whether or not the string can be represented by a float.
 
-            """
+        """
 
         try:
             float(s)

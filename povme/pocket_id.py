@@ -4,17 +4,19 @@
 # If you have any questions, comments, or suggestions, please don't hesitate
 # to contact me, Jacob Durrant, at durrantj [at] pitt [dot] edu.
 
+import getopt
+import multiprocessing
 import sys
+import textwrap
+import warnings
+
 import numpy
+from numpy.lib.recfunctions import append_fields
 from scipy import spatial
 from scipy.cluster.vq import kmeans2
 from scipy.spatial.distance import cdist
-import textwrap
-import getopt
-from numpy.lib.recfunctions import append_fields
-import multiprocessing
-import warnings
-from .common import openfile, setup_testing_dir, delete_testing_dir, test_passed
+
+from .common import delete_testing_dir, openfile, setup_testing_dir, test_passed
 
 # POVME Pocket ID 1.0 is a program for identifying protein pockets and
 # generating appropriate pocket-encompassing inclusion spheres. These spheres,
@@ -35,11 +37,11 @@ class Information:
     def __init__(self, parent_molecule_object):
         """Initializes the Information class.
 
-            Arguments:
-            parent_molecule_object -- The Molecule object associated with this
-                class.
+        Arguments:
+        parent_molecule_object -- The Molecule object associated with this
+            class.
 
-            """
+        """
 
         self.__parent_molecule = parent_molecule_object
 
@@ -68,18 +70,18 @@ class Information:
     def get_bounding_box(self, selection=None, padding=0.0):
         """Calculates a box that bounds (encompasses) a set of atoms.
 
-            Arguments:
-            selection -- An optional numpy.array containing the indices of the
-                atoms to consider. If ommitted, all atoms of the Molecule
-                object will be considered.
-            padding -- An optional float. The bounding box will extend this
-                many angstroms beyond the atoms being considered.
+        Arguments:
+        selection -- An optional numpy.array containing the indices of the
+            atoms to consider. If ommitted, all atoms of the Molecule
+            object will be considered.
+        padding -- An optional float. The bounding box will extend this
+            many angstroms beyond the atoms being considered.
 
-            Returns:
-            A numpy array representing two 3D points, (min_x, min_y, min_z)
-                and (max_x, max_y, max_z), that bound the molecule.
+        Returns:
+        A numpy array representing two 3D points, (min_x, min_y, min_z)
+            and (max_x, max_y, max_z), that bound the molecule.
 
-            """
+        """
 
         if selection is None:
             selection = self.__parent_molecule.select_all()
@@ -98,11 +100,11 @@ class FileIO:
     def __init__(self, parent_molecule_object):
         """Initializes the FileIO class.
 
-            Arguments:
-            parent_molecule_object -- The Molecule object associated with this
-                class.
+        Arguments:
+        parent_molecule_object -- The Molecule object associated with this
+            class.
 
-            """
+        """
 
         self.__parent_molecule = parent_molecule_object
 
@@ -113,7 +115,7 @@ class FileIO:
             Arguments:
             filename -- A string, the filename of the pdb file.
 
-            """
+        """
 
         # open/read the file
         afile = openfile(filename, "r")
@@ -129,7 +131,7 @@ class FileIO:
             Arguments:
             file_obj -- A python file object, containing pdb-formatted data.
 
-            """
+        """
 
         # source_data = numpy.genfromtxt(file_obj, dtype="S6,S5,S5,S4,S2,S4,S4,S8,S8,S8,S6,S6,S10,S2,S2", names=['record_name', 'serial', 'name', 'resname', 'chainid', 'resseq', 'empty', 'x', 'y', 'z', 'occupancy', 'tempfactor', 'empty2', 'element', 'charge'], delimiter=[6, 5, 5, 4, 2, 4, 4, 8, 8, 8, 6, 6, 10, 2, 2])
         source_data = numpy.genfromtxt(
@@ -246,32 +248,32 @@ class Selections:
     def __init__(self, parent_molecule_object):
         """Initializes the Selections class.
 
-            Arguments:
-            parent_molecule_object -- The Molecule object associated with this
-                class.
+        Arguments:
+        parent_molecule_object -- The Molecule object associated with this
+            class.
 
-            """
+        """
 
         self.__parent_molecule = parent_molecule_object
 
     def select_atoms(self, selection_criteria):
         """Select a set of atoms based on user-specified criteria.
 
-            Arguments:
-            selection_criteria -- An dictionary, where the keys correspond to
-                keys in the
-                self.__parent_molecule.information.get_atom_information()
-                structured numpy array, and the values are lists of acceptable
-                matches. The selection is a logical "AND" between dictionary
-                entries, but "OR" within the value lists themselves. For
-                example: {'atom':['CA','O'], 'chain':'A', 'resname':'PRO'}
-                would select all atoms with the names CA or O that are located
-                in the PRO residues of chain A.
+        Arguments:
+        selection_criteria -- An dictionary, where the keys correspond to
+            keys in the
+            self.__parent_molecule.information.get_atom_information()
+            structured numpy array, and the values are lists of acceptable
+            matches. The selection is a logical "AND" between dictionary
+            entries, but "OR" within the value lists themselves. For
+            example: {'atom':['CA','O'], 'chain':'A', 'resname':'PRO'}
+            would select all atoms with the names CA or O that are located
+            in the PRO residues of chain A.
 
-            Returns:
-            A numpy.array containing the indices of the atoms of the selection.
+        Returns:
+        A numpy.array containing the indices of the atoms of the selection.
 
-            """
+        """
 
         try:
             selection = numpy.ones(
@@ -329,7 +331,7 @@ class Selections:
             A numpy.array containing the indices of all atoms that are not in
                 the user-defined seleciton.
 
-            """
+        """
 
         # selection is a list of atom indices
         all_atoms = numpy.arange(
@@ -341,26 +343,26 @@ class Selections:
     def select_all(self):
         """Selects all the atoms in a Molecule object.
 
-            Returns:
-            A numpy.array containing the indices of all atoms in the Molecule
-                object.
+        Returns:
+        A numpy.array containing the indices of all atoms in the Molecule
+            object.
 
-            """
+        """
 
         return self.select_atoms({})
 
     def get_molecule_from_selection(self, selection):
         """Creates a Molecule from a user-defined atom selection.
 
-            Arguments
-            selection -- A numpy.array containing the indices of the atoms in
-                the user-defined selection.
+        Arguments
+        selection -- A numpy.array containing the indices of the atoms in
+            the user-defined selection.
 
-            Returns:
-            A Molecule object containing the atoms of the user-defined
-                selection.
+        Returns:
+        A Molecule object containing the atoms of the user-defined
+            selection.
 
-            """
+        """
 
         new_mol = Molecule()
         new_mol.set_coordinates(self.__parent_molecule.get_coordinates()[selection])
@@ -431,16 +433,16 @@ class Molecule:
     ):  # surprised this doesn't come with numpy
         """Removes a specific field name from a structured numpy array.
 
-            Arguments:
-            narray -- A structured numpy array.
-            field_names -- A list of strings, where each string is one of the
-                field names of narray.
+        Arguments:
+        narray -- A structured numpy array.
+        field_names -- A list of strings, where each string is one of the
+            field names of narray.
 
-            Returns:
-            A structured numpy array identical to narray, but with the field
-                names in field_names removed.
+        Returns:
+        A structured numpy array identical to narray, but with the field
+            names in field_names removed.
 
-            """
+        """
 
         names = list(
             narray.dtype.names
@@ -467,13 +469,13 @@ class ConvexHull:
     def inside_hull(self, our_point):
         """Determines if a point is inside the hull
 
-            Arguments:
-            our_point -- An x,y,z array
+        Arguments:
+        our_point -- An x,y,z array
 
-            Returns:
-            A boolean, True if the point is inside the hull, False otherwise.
+        Returns:
+        A boolean, True if the point is inside the hull, False otherwise.
 
-            """
+        """
 
         return not self.outside_hull(our_point, self.hull)
 
@@ -490,7 +492,7 @@ class ConvexHull:
             Returns:
             True if our_point exists outside of the hull, False otherwise.
 
-            """
+        """
 
         our_point = numpy.array(our_point)  # convert it to an numpy.array
         for triangle in triangles:
@@ -528,7 +530,7 @@ class ConvexHull:
             if seg_index exists in the keys of seg_dict, return the value.
                 Otherwise, return 0.
 
-            """
+        """
 
         # we want the index with the greater x-value, so we don't get
         # identical segments in the dictionary more than once
@@ -557,7 +559,7 @@ class ConvexHull:
             seg_index -- the key of the dictionary member we are going to
                 increment.
 
-            """
+        """
 
         # we want the index with the greater x-value, so we don't get
         # identical segments in the dictionary more than once
@@ -578,18 +580,18 @@ class ConvexHull:
     def gift_wrapping_3d(self, raw_points):
         """Gift wrapping for 3d convex hull.
 
-            Arguments:
-            raw_points -- A nx3 array of points, where each row corresponds to
-                an x,y,z point coordinate.
+        Arguments:
+        raw_points -- A nx3 array of points, where each row corresponds to
+            an x,y,z point coordinate.
 
-            Returns:
-            A convex hull represented by a list of triangles. Each triangle is
-                a 3x3 array, where each row is an x,y,z coordinate in space.
-                The 3 rows describe the location of the 3 corners of the
-                triangle. Each of the 3 points are arranged so that a cross
-                product will point outwards from the hull.
+        Returns:
+        A convex hull represented by a list of triangles. Each triangle is
+            a 3x3 array, where each row is an x,y,z coordinate in space.
+            The 3 rows describe the location of the 3 corners of the
+            triangle. Each of the 3 points are arranged so that a cross
+            product will point outwards from the hull.
 
-            """
+        """
 
         n = numpy.shape(raw_points)[0]  # number of points
         point1 = raw_points[0]  # take the first point
@@ -737,7 +739,7 @@ class ConvexHull:
             All members of original set of points that fall outside the
                 Akl-Toussaint octahedron
 
-            """
+        """
 
         x_high = (-1e99, 0, 0)
         x_low = (1e99, 0, 0)
@@ -877,13 +879,13 @@ class BoxOfPoints:
     def __init__(self, box, reso):
         """Initialize the class.
 
-            Arguments:
-            box -- A numpy array representing two 3D points, (min_x, min_y,
-                min_z) and (max_x, max_y, max_z), that define a box.
-            reso -- The space between the points of the box, in the X, Y, and
-                Z direction.
+        Arguments:
+        box -- A numpy array representing two 3D points, (min_x, min_y,
+            min_z) and (max_x, max_y, max_z), that define a box.
+        reso -- The space between the points of the box, in the X, Y, and
+            Z direction.
 
-            """
+        """
 
         self.write_pdbs = write_pdbs()
 
@@ -900,26 +902,26 @@ class BoxOfPoints:
     def __snap_float(self, val, reso):
         """Snaps an arbitrary point to the nearest grid point.
 
-            Arguments:
-            val -- A numpy array corresponding to a 3D point.
-            reso -- The resolution (distance in the X, Y, and Z directions
-                between adjacent points) of the grid.
+        Arguments:
+        val -- A numpy array corresponding to a 3D point.
+        reso -- The resolution (distance in the X, Y, and Z directions
+            between adjacent points) of the grid.
 
-            Returns:
-            A numpy array corresponding to a 3D point near val that is on a
-                nearby grid point.
+        Returns:
+        A numpy array corresponding to a 3D point near val that is on a
+            nearby grid point.
 
-            """
+        """
 
         return numpy.floor(val / reso) * reso
 
     def remove_points_outside_convex_hull(self, hull):
         """Removes box points that are outside a convex hull.
 
-            Arguments:
-            hull -- The convex hull.
+        Arguments:
+        hull -- The convex hull.
 
-            """
+        """
 
         chunks = [
             (hull, t) for t in numpy.array_split(self.points, params["processors"])
@@ -960,7 +962,7 @@ class BoxOfPoints:
             dist_cutoff -- A float, the cutoff distance to use in determining
                 whether or not box points will be removed.
 
-            """
+        """
 
         # note, in newer versions of scipy use cKDTree
         box_of_pts_distance_tree = spatial.KDTree(self.points)
@@ -1002,13 +1004,13 @@ class BoxOfPoints:
     def to_pdb(self, let="X"):
         """Converts the points in this box into a PDB representation.
 
-            Arguments:
-            let -- An optional string, the chain ID to use. "X" by default.
+        Arguments:
+        let -- An optional string, the chain ID to use. "X" by default.
 
-            Returns:
-            A PDB-formatted string.
+        Returns:
+        A PDB-formatted string.
 
-            """
+        """
 
         return self.write_pdbs.numpy_to_pdb(self.points, let)
 
@@ -1021,7 +1023,7 @@ class BoxOfPoints:
                 the existing points, in the X, Y, and Z directions.
             reso -- The distance between adjacent added points.
 
-            """
+        """
 
         new_pts = []
 
@@ -1148,7 +1150,7 @@ class BoxOfPoints:
                 pocket_indexes = numpy.hstack(
                     (
                         pocket_indexes,
-                        indecies_of_neighbors
+                        indecies_of_neighbors,
                         # one_index_of_neighbor  # Not sure why it used to be this.
                     )
                 )

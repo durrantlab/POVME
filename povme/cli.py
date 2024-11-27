@@ -2,56 +2,62 @@
 
 import argparse
 import sys
-from .povme import RunPOVME
-from .pocket_id import run_pocket_id
 
 from . import __version__
+from .pocket_id import run_pocket_id
+from .povme import RunPOVME
+
 
 def parse_inclusion_regions(args):
     inclusion_regions = []
     if args.points_inclusion_sphere:
         for sphere in args.points_inclusion_sphere:
-            inclusion_regions.append(f"PointsInclusionSphere {' '.join(map(str, sphere))}")
+            inclusion_regions.append(
+                f"PointsInclusionSphere {' '.join(map(str, sphere))}"
+            )
     if args.points_inclusion_box:
         for box in args.points_inclusion_box:
             inclusion_regions.append(f"PointsInclusionBox {' '.join(map(str, box))}")
     return inclusion_regions
 
+
 def parse_exclusion_regions(args):
     exclusion_regions = []
     if args.points_exclusion_sphere:
         for sphere in args.points_exclusion_sphere:
-            exclusion_regions.append(f"PointsExclusionSphere {' '.join(map(str, sphere))}")
+            exclusion_regions.append(
+                f"PointsExclusionSphere {' '.join(map(str, sphere))}"
+            )
     if args.points_exclusion_box:
         for box in args.points_exclusion_box:
             exclusion_regions.append(f"PointsExclusionBox {' '.join(map(str, box))}")
     return exclusion_regions
 
-def main():
+
+def povme_cli():
     parser = argparse.ArgumentParser(
         description=f"POVME {__version__}",
-        formatter_class=argparse.ArgumentDefaultsHelpFormatter
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter,
     )
 
     subparsers = parser.add_subparsers(
         title="subcommands",
         description="Valid subcommands",
         help="Additional help",
-        dest="command"
+        dest="command",
     )
     subparsers.required = True
 
     # Subparser for run_povme
     povme_parser = subparsers.add_parser(
-        "run_povme",
-        help="Run the primary POVME analysis"
+        "run_povme", help="Run the primary POVME analysis"
     )
 
     # Required arguments
     povme_parser.add_argument(
         "--pdb",
         required=True,
-        help="Path to the receptor PDB file (can be a trajectory with multiple frames)"
+        help="Path to the receptor PDB file (can be a trajectory with multiple frames)",
     )
 
     # Inclusion regions
@@ -59,17 +65,17 @@ def main():
         "--inclusion-sphere",
         type=float,
         nargs=4,
-        action='append',
-        metavar=('X', 'Y', 'Z', 'RADIUS'),
-        help="Define an inclusion sphere with X Y Z coordinates and RADIUS. Can be used multiple times."
+        action="append",
+        metavar=("X", "Y", "Z", "RADIUS"),
+        help="Define an inclusion sphere with X Y Z coordinates and RADIUS. Can be used multiple times.",
     )
     povme_parser.add_argument(
         "--inclusion-box",
         type=float,
         nargs=6,
-        action='append',
-        metavar=('X', 'Y', 'Z', 'DX', 'DY', 'DZ'),
-        help="Define an inclusion box with X Y Z coordinates and dimensions DX DY DZ. Can be used multiple times."
+        action="append",
+        metavar=("X", "Y", "Z", "DX", "DY", "DZ"),
+        help="Define an inclusion box with X Y Z coordinates and dimensions DX DY DZ. Can be used multiple times.",
     )
 
     # Exclusion regions
@@ -77,17 +83,17 @@ def main():
         "--exclusion-sphere",
         type=float,
         nargs=4,
-        action='append',
-        metavar=('X', 'Y', 'Z', 'RADIUS'),
-        help="Define an exclusion sphere with X Y Z coordinates and RADIUS. Can be used multiple times."
+        action="append",
+        metavar=("X", "Y", "Z", "RADIUS"),
+        help="Define an exclusion sphere with X Y Z coordinates and RADIUS. Can be used multiple times.",
     )
     povme_parser.add_argument(
         "--exclusion-box",
         type=float,
         nargs=6,
-        action='append',
-        metavar=('X', 'Y', 'Z', 'DX', 'DY', 'DZ'),
-        help="Define an exclusion box with X Y Z coordinates and dimensions DX DY DZ. Can be used multiple times."
+        action="append",
+        metavar=("X", "Y", "Z", "DX", "DY", "DZ"),
+        help="Define an exclusion box with X Y Z coordinates and dimensions DX DY DZ. Can be used multiple times.",
     )
 
     # Grid spacing
@@ -95,16 +101,16 @@ def main():
         "--grid-spacing",
         type=float,
         default=1.0,
-        help="Distance separating each equidistant point (default: 1.0 Å)"
+        help="Distance separating each equidistant point (default: 1.0 Å)",
     )
 
     # Save points
     povme_parser.add_argument(
         "--save-points",
         type=str,
-        choices=['true', 'false'],
-        default='false',
-        help="Whether to save the generated point field (true/false)"
+        choices=["true", "false"],
+        default="false",
+        help="Whether to save the generated point field (true/false)",
     )
 
     # Distance cutoff
@@ -112,16 +118,16 @@ def main():
         "--distance-cutoff",
         type=float,
         default=1.09,
-        help="Distance cutoff for removing points near receptor atoms (default: 1.09 Å)"
+        help="Distance cutoff for removing points near receptor atoms (default: 1.09 Å)",
     )
 
     # Convex hull exclusion
     povme_parser.add_argument(
         "--convex-hull-exclusion",
         type=str,
-        choices=['true', 'false'],
-        default='false',
-        help="Activate convex hull exclusion (true/false)"
+        choices=["true", "false"],
+        default="false",
+        help="Activate convex hull exclusion (true/false)",
     )
 
     # Contiguous points criteria
@@ -129,7 +135,7 @@ def main():
         "--contiguous-points-criteria",
         type=int,
         default=3,
-        help="Minimum number of neighboring points to retain a point (default: 3)"
+        help="Minimum number of neighboring points to retain a point (default: 3)",
     )
 
     # Contiguous pocket seed
@@ -137,17 +143,17 @@ def main():
         "--pocket-seed-sphere",
         type=float,
         nargs=4,
-        action='append',
-        metavar=('X', 'Y', 'Z', 'RADIUS'),
-        help="Define a pocket seed sphere with X Y Z coordinates and RADIUS. Can be used multiple times."
+        action="append",
+        metavar=("X", "Y", "Z", "RADIUS"),
+        help="Define a pocket seed sphere with X Y Z coordinates and RADIUS. Can be used multiple times.",
     )
     povme_parser.add_argument(
         "--pocket-seed-box",
         type=float,
         nargs=6,
-        action='append',
-        metavar=('X', 'Y', 'Z', 'DX', 'DY', 'DZ'),
-        help="Define a pocket seed box with X Y Z coordinates and dimensions DX DY DZ. Can be used multiple times."
+        action="append",
+        metavar=("X", "Y", "Z", "DX", "DY", "DZ"),
+        help="Define a pocket seed box with X Y Z coordinates and dimensions DX DY DZ. Can be used multiple times.",
     )
 
     # Additional POVME parameters
@@ -155,81 +161,79 @@ def main():
         "--num-processors",
         type=int,
         default=1,
-        help="Number of processors to use (default: 1)"
+        help="Number of processors to use (default: 1)",
     )
     povme_parser.add_argument(
         "--use-disk-not-memory",
         type=str,
-        choices=['true', 'false'],
-        default='false',
-        help="Use disk space instead of memory (true/false)"
+        choices=["true", "false"],
+        default="false",
+        help="Use disk space instead of memory (true/false)",
     )
     povme_parser.add_argument(
         "--output-prefix",
         type=str,
         default="./POVME_output/",
-        help="Prefix for output files"
+        help="Prefix for output files",
     )
     povme_parser.add_argument(
         "--save-individual-volumes",
         type=str,
-        choices=['true', 'false'],
-        default='false',
-        help="Save individual pocket volumes (true/false)"
+        choices=["true", "false"],
+        default="false",
+        help="Save individual pocket volumes (true/false)",
     )
     povme_parser.add_argument(
         "--save-trajectory",
         type=str,
-        choices=['true', 'false'],
-        default='false',
-        help="Save pocket volumes as a trajectory (true/false)"
+        choices=["true", "false"],
+        default="false",
+        help="Save pocket volumes as a trajectory (true/false)",
     )
     povme_parser.add_argument(
         "--equal-num-points",
         type=str,
-        choices=['true', 'false'],
-        default='false',
-        help="Ensure equal number of points per frame (true/false)"
+        choices=["true", "false"],
+        default="false",
+        help="Ensure equal number of points per frame (true/false)",
     )
     povme_parser.add_argument(
         "--save-tabbed",
         type=str,
-        choices=['true', 'false'],
-        default='false',
-        help="Save volumes in tabbed format (true/false)"
+        choices=["true", "false"],
+        default="false",
+        help="Save volumes in tabbed format (true/false)",
     )
     povme_parser.add_argument(
         "--save-density-map",
         type=str,
-        choices=['true', 'false'],
-        default='false',
-        help="Save volumetric density map (true/false)"
+        choices=["true", "false"],
+        default="false",
+        help="Save volumetric density map (true/false)",
     )
     povme_parser.add_argument(
         "--compress-output",
         type=str,
-        choices=['true', 'false'],
-        default='false',
-        help="Compress output files (true/false)"
+        choices=["true", "false"],
+        default="false",
+        help="Compress output files (true/false)",
     )
 
     # Subparser for pocket_id
     pocket_id_parser = subparsers.add_parser(
         "pocket_id",
-        help="Run Pocket ID to identify protein pockets and generate inclusion spheres"
+        help="Run Pocket ID to identify protein pockets and generate inclusion spheres",
     )
 
     # Pocket ID specific arguments
     pocket_id_parser.add_argument(
-        "--input-pdb",
-        required=True,
-        help="Path to the input PDB file for Pocket ID"
+        "--input-pdb", required=True, help="Path to the input PDB file for Pocket ID"
     )
     pocket_id_parser.add_argument(
         "--output-prefix",
         type=str,
         default="./PocketID_output/",
-        help="Prefix for Pocket ID output files"
+        help="Prefix for Pocket ID output files",
     )
     # Add more Pocket ID specific arguments here as needed
 
@@ -259,7 +263,9 @@ def main():
         # Pocket seed regions
         if args.pocket_seed_sphere:
             for sphere in args.pocket_seed_sphere:
-                povme_args.append(f"ContiguousPocketSeedSphere {' '.join(map(str, sphere))}")
+                povme_args.append(
+                    f"ContiguousPocketSeedSphere {' '.join(map(str, sphere))}"
+                )
         if args.pocket_seed_box:
             for box in args.pocket_seed_box:
                 povme_args.append(f"ContiguousPocketSeedBox {' '.join(map(str, box))}")
@@ -293,6 +299,3 @@ def main():
     else:
         parser.print_help()
         sys.exit(1)
-
-if __name__ == "__main__":
-    main()
