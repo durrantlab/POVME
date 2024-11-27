@@ -4,3 +4,7 @@
 # pixi environments
 .pixi
 *.egg-info
+
+# Documentation
+api
+public
