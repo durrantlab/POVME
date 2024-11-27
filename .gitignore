@@ -1,2 +1,6 @@
 *.pyc
 .DS_Store
+
+# pixi environments
+.pixi
+*.egg-info

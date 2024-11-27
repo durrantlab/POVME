@@ -1,0 +1,9 @@
+[run]
+branch = true
+source = tests
+
+[paths]
+source = povme
+
+[report]
+show_missing = true

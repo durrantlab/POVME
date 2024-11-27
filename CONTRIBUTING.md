@@ -36,14 +36,14 @@ modify it to correct bugs or add features.
 Follow these steps to "push" your changes to the main online repository so
 others can benefit from them:
 
-* Create a [new merge
+*   Create a [new merge
   request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
   with your changes.
 
-* Ensure the description clearly describes the problem and solution. Include
+*   Ensure the description clearly describes the problem and solution. Include
   the relevant issue number if applicable.
 
-* Before submitting, please read this CONTRIBUTING.md file to know more about
+*   Before submitting, please read this CONTRIBUTING.md file to know more about
   coding conventions and benchmarks.
 
 ## Coding conventions
@@ -113,8 +113,8 @@ forum](http://durrantlab.com/forums/).
 
 This document was inspired by:
 
-* [Ruby on Rails CONTRIBUTING.md
+*   [Ruby on Rails CONTRIBUTING.md
   file](https://raw.githubusercontent.com/rails/rails/master/CONTRIBUTING.md)
   (MIT License).
-* [weallcontribute](https://github.com/WeAllJS/weallcontribute/blob/latest/CONTRIBUTING.md)
+*   [weallcontribute](https://github.com/WeAllJS/weallcontribute/blob/latest/CONTRIBUTING.md)
   (Public Domain License).

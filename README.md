@@ -29,9 +29,9 @@ questions, comments, or suggestions, please don't hesitate to contact me,
 
 If you use POVME in your work, please cite:
 
-1. Durrant, J. D., C. A. de Oliveira, et al. (2011). "POVME: An algorithm for
+1.  Durrant, J. D., C. A. de Oliveira, et al. (2011). "POVME: An algorithm for
    measuring binding-pocket volumes." J Mol Graph Model 29(5): 773-776.
-2. Durrant, J.D., L. Votapka, J. Sørensen, and R. E. Amaro (2014). "POVME 2.0:
+2.  Durrant, J.D., L. Votapka, J. Sørensen, and R. E. Amaro (2014). "POVME 2.0:
    An Enhanced Tool for Determining Pocket Shape and Volume Characteristics."
    J. Chem. Theory Comput. 10(11):5047-5056.
 
