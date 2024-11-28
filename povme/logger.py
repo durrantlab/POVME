@@ -1,7 +1,9 @@
+from typing import Any
+
 from .io import gzopenfile, write_to_file
 
 
-def log(astr, parameters):
+def log(astr: str, parameters: dict[str, Any]) -> None:
     """Output POVME statements, either to the screen or to a file.
 
     Args:

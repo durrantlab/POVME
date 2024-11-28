@@ -1,8 +1,11 @@
+from typing import Any
+
 import gzip
 import platform
 from pathlib import Path, PureWindowsPath
 
 import numpy as np
+import numpy.typing as npt
 
 
 def fix_filename(path: str, must_exist: bool = True) -> Path:
@@ -132,7 +135,7 @@ class write_pdbs:
         """Create a string formatted according to the PDB standard.
 
         Args:
-            numpy_array: A 1x3 numpy.array representing a 3D point.
+            numpy_array: A 1x3 np.array representing a 3D point.
             index: An integer, the atom index to use in the string.
             resname: A string, the RESNAME to use.
             letter: A string, the atom name/chain/etc to use for the output.
@@ -166,10 +169,10 @@ class write_pdbs:
     def numpy_to_pdb(self, narray, letter, resname=""):
         """Create a string formatted according to the PDB standard.
 
-        Arguments:
-        narray -- A nx3 numpy.array representing a 3D point.
-        letter -- A string, the atom name/chain/etc to use for the output.
-        resname -- An optional string, the RESNAME to use for the output.
+        Args:
+        narray: A nx3 np.array representing a 3D point.
+        letter: A string, the atom name/chain/etc to use for the output.
+        resname: An optional string, the RESNAME to use for the output.
 
         Returns:
         A string, formatted according to the PDB standard.
@@ -292,14 +295,14 @@ def numpy_to_pdb(narray, letter, resname=""):
         return t
 
 
-def dx_freq(freq_mat, parameters):
+def dx_freq(freq_mat: npt.NDArray[np.float64], parameters: dict[str, Any]) -> None:
     """Generates a DX file that records the frequency that a volume element is
     open.
 
     Args:
-    freq_mat: a Nx4 matrix, where the first 3 columns are the x,y,z coords
-        of the point, and the 4th column is the frequency of emptiness for that
-        point in space
+        freq_mat: a Nx4 matrix, where the first 3 columns are the x,y,z coords
+            of the point, and the 4th column is the frequency of emptiness for that
+            point in space
 
     """
 
@@ -405,4 +408,3 @@ component "data" value 3"""
             newline_counter += 1
         write_to_file(dx_file, footer, encode=parameters["CompressOutput"])
         dx_file.close
-    return

@@ -1,16 +1,10 @@
-# POVME Pocket ID 1.0 is released under the GNU General Public License (see
-# http://www.gnu.org/licenses/gpl.html).
-
-# If you have any questions, comments, or suggestions, please don't hesitate
-# to contact me, Jacob Durrant, at durrantj [at] pitt [dot] edu.
-
 import getopt
 import multiprocessing
 import sys
 import textwrap
 import warnings
 
-import numpy
+import numpy as np
 from numpy.lib.recfunctions import append_fields
 from scipy import spatial
 from scipy.cluster.vq import kmeans2
@@ -23,7 +17,7 @@ from .common import delete_testing_dir, openfile, setup_testing_dir, test_passed
 # modified as required, can then be used as POVME input.
 
 # Supress errors
-numpy.seterr(all="ignore")
+np.seterr(all="ignore")
 warnings.simplefilter("ignore")  # no "One of the clusters is empty." warnings
 
 # Some classes are required to support the loading and manipulation of 3D
@@ -37,8 +31,8 @@ class Information:
     def __init__(self, parent_molecule_object):
         """Initializes the Information class.
 
-        Arguments:
-        parent_molecule_object -- The Molecule object associated with this
+        Args:
+        parent_molecule_object: The Molecule object associated with this
             class.
 
         """
@@ -70,11 +64,11 @@ class Information:
     def get_bounding_box(self, selection=None, padding=0.0):
         """Calculates a box that bounds (encompasses) a set of atoms.
 
-        Arguments:
-        selection -- An optional numpy.array containing the indices of the
+        Args:
+        selection: An optional np.array containing the indices of the
             atoms to consider. If ommitted, all atoms of the Molecule
             object will be considered.
-        padding -- An optional float. The bounding box will extend this
+        padding: An optional float. The bounding box will extend this
             many angstroms beyond the atoms being considered.
 
         Returns:
@@ -86,10 +80,10 @@ class Information:
         if selection is None:
             selection = self.__parent_molecule.select_all()
 
-        return numpy.vstack(
+        return np.vstack(
             (
-                numpy.min(self.__coordinates[selection], 0),
-                numpy.max(self.__coordinates[selection], 0),
+                np.min(self.__coordinates[selection], 0),
+                np.max(self.__coordinates[selection], 0),
             )
         )
 
@@ -100,8 +94,8 @@ class FileIO:
     def __init__(self, parent_molecule_object):
         """Initializes the FileIO class.
 
-        Arguments:
-        parent_molecule_object -- The Molecule object associated with this
+        Args:
+        parent_molecule_object: The Molecule object associated with this
             class.
 
         """
@@ -112,8 +106,8 @@ class FileIO:
         """Loads the molecular data contained in a pdb file into the current
         Molecule object.
 
-            Arguments:
-            filename -- A string, the filename of the pdb file.
+            Args:
+            filename: A string, the filename of the pdb file.
 
         """
 
@@ -128,13 +122,13 @@ class FileIO:
         load_pdb_into() function instead, which is identical except that it
         accepts a filename string instead of a python file object.
 
-            Arguments:
-            file_obj -- A python file object, containing pdb-formatted data.
+            Args:
+            file_obj: A python file object, containing pdb-formatted data.
 
         """
 
-        # source_data = numpy.genfromtxt(file_obj, dtype="S6,S5,S5,S4,S2,S4,S4,S8,S8,S8,S6,S6,S10,S2,S2", names=['record_name', 'serial', 'name', 'resname', 'chainid', 'resseq', 'empty', 'x', 'y', 'z', 'occupancy', 'tempfactor', 'empty2', 'element', 'charge'], delimiter=[6, 5, 5, 4, 2, 4, 4, 8, 8, 8, 6, 6, 10, 2, 2])
-        source_data = numpy.genfromtxt(
+        # source_data = np.genfromtxt(file_obj, dtype="S6,S5,S5,S4,S2,S4,S4,S8,S8,S8,S6,S6,S10,S2,S2", names=['record_name', 'serial', 'name', 'resname', 'chainid', 'resseq', 'empty', 'x', 'y', 'z', 'occupancy', 'tempfactor', 'empty2', 'element', 'charge'], delimiter=[6, 5, 5, 4, 2, 4, 4, 8, 8, 8, 6, 6, 10, 2, 2])
+        source_data = np.genfromtxt(
             file_obj,
             dtype="S6,S5,S5,S5,S1,S4,S4,S8,S8,S8,S6,S6,S10,S2,S3",
             names=[
@@ -163,11 +157,11 @@ class FileIO:
             )  # in case the pdb file has only one line
 
         # get the ones that are ATOM or HETATOM in the record_name
-        or_matrix = numpy.logical_or(
+        or_matrix = np.logical_or(
             (source_data["record_name"] == b"ATOM  "),
             (source_data["record_name"] == b"HETATM"),
         )
-        indices_of_atom_or_hetatom = numpy.nonzero(or_matrix)[0]
+        indices_of_atom_or_hetatom = np.nonzero(or_matrix)[0]
         self.__parent_molecule.set_atom_information(
             source_data[indices_of_atom_or_hetatom]
         )
@@ -179,8 +173,8 @@ class FileIO:
             + self.__parent_molecule.get_constants()["f8_fields"]
         ):
             check_fields = self.__parent_molecule.get_atom_information()[field]
-            check_fields = numpy.char.strip(check_fields)
-            indices_of_empty = numpy.nonzero(check_fields == "")[0]
+            check_fields = np.char.strip(check_fields)
+            indices_of_empty = np.nonzero(check_fields == "")[0]
             self.__parent_molecule.get_atom_information()[field][indices_of_empty] = "0"
 
         # now actually change the type
@@ -196,7 +190,7 @@ class FileIO:
                 field
             )
             descr[index] = (descr[index][0], "f8")
-        new_types = numpy.dtype(descr)
+        new_types = np.dtype(descr)
         self.__parent_molecule.set_atom_information(
             self.__parent_molecule.get_atom_information().astype(new_types)
         )
@@ -211,7 +205,7 @@ class FileIO:
         # the coordinates need to be placed in their own special numpy array
         # to facilitate later manipulation
         self.__parent_molecule.set_coordinates(
-            numpy.vstack(
+            np.vstack(
                 [
                     self.__parent_molecule.get_atom_information()["x"],
                     self.__parent_molecule.get_atom_information()["y"],
@@ -234,7 +228,7 @@ class FileIO:
                 append_fields(
                     self.__parent_molecule.get_atom_information(),
                     f + "_stripped",
-                    data=numpy.char.strip(
+                    data=np.char.strip(
                         self.__parent_molecule.get_atom_information()[f]
                     ),
                 )
@@ -248,8 +242,8 @@ class Selections:
     def __init__(self, parent_molecule_object):
         """Initializes the Selections class.
 
-        Arguments:
-        parent_molecule_object -- The Molecule object associated with this
+        Args:
+        parent_molecule_object: The Molecule object associated with this
             class.
 
         """
@@ -259,8 +253,8 @@ class Selections:
     def select_atoms(self, selection_criteria):
         """Select a set of atoms based on user-specified criteria.
 
-        Arguments:
-        selection_criteria -- An dictionary, where the keys correspond to
+        Args:
+        selection_criteria: An dictionary, where the keys correspond to
             keys in the
             self.__parent_molecule.information.get_atom_information()
             structured numpy array, and the values are lists of acceptable
@@ -271,12 +265,12 @@ class Selections:
             in the PRO residues of chain A.
 
         Returns:
-        A numpy.array containing the indices of the atoms of the selection.
+        A np.array containing the indices of the atoms of the selection.
 
         """
 
         try:
-            selection = numpy.ones(
+            selection = np.ones(
                 len(self.__parent_molecule.get_atom_information()), dtype=bool
             )  # start assuming everything is selected
 
@@ -297,20 +291,20 @@ class Selections:
                     vals = [v.strip() for v in vals]
 
                 # "or" all the vals together
-                subselection = numpy.zeros(
+                subselection = np.zeros(
                     len(self.__parent_molecule.get_atom_information()), dtype=bool
                 )  # start assuming nothing is selected
                 for val in vals:
-                    subselection = numpy.logical_or(
+                    subselection = np.logical_or(
                         subselection,
                         (self.__parent_molecule.get_atom_information()[key] == val),
                     )
 
                 # now "and" that with everything else
-                selection = numpy.logical_and(selection, subselection)
+                selection = np.logical_and(selection, subselection)
 
             # now get the indices of the selection
-            return numpy.nonzero(selection)[0]
+            return np.nonzero(selection)[0]
         except:
             print("ERROR: Could not make the selection. Existing fields:")
             print(
@@ -323,28 +317,28 @@ class Selections:
         """Inverts a user-defined selection (i.e., identifies all atoms that
         are not in the seleciton).
 
-            Arguments:
-            selection -- A numpy.array containing the indices of the
+            Args:
+            selection: A np.array containing the indices of the
                 user-defined selection.
 
             Returns:
-            A numpy.array containing the indices of all atoms that are not in
+            A np.array containing the indices of all atoms that are not in
                 the user-defined seleciton.
 
         """
 
         # selection is a list of atom indices
-        all_atoms = numpy.arange(
+        all_atoms = np.arange(
             0, len(self.__parent_molecule.get_atom_information()), 1, dtype=int
         )
-        remaining_indicies = numpy.delete(all_atoms, selection)
-        return remaining_indicies
+        remaining_indices = np.delete(all_atoms, selection)
+        return remaining_indices
 
     def select_all(self):
         """Selects all the atoms in a Molecule object.
 
         Returns:
-        A numpy.array containing the indices of all atoms in the Molecule
+        A np.array containing the indices of all atoms in the Molecule
             object.
 
         """
@@ -355,7 +349,7 @@ class Selections:
         """Creates a Molecule from a user-defined atom selection.
 
         Arguments
-        selection -- A numpy.array containing the indices of the atoms in
+        selection: A np.array containing the indices of the atoms in
             the user-defined selection.
 
         Returns:
@@ -433,9 +427,9 @@ class Molecule:
     ):  # surprised this doesn't come with numpy
         """Removes a specific field name from a structured numpy array.
 
-        Arguments:
-        narray -- A structured numpy array.
-        field_names -- A list of strings, where each string is one of the
+        Args:
+        narray: A structured numpy array.
+        field_names: A list of strings, where each string is one of the
             field names of narray.
 
         Returns:
@@ -469,8 +463,8 @@ class ConvexHull:
     def inside_hull(self, our_point):
         """Determines if a point is inside the hull
 
-        Arguments:
-        our_point -- An x,y,z array
+        Args:
+        our_point: An x,y,z array
 
         Returns:
         A boolean, True if the point is inside the hull, False otherwise.
@@ -485,16 +479,16 @@ class ConvexHull:
         """Given the hull as defined by a list of triangles, this definition
         will return whether a point is within these or not.
 
-            Arguments:
-            our_point -- an x,y,z array
-            epsilon -- needed for imprecisions in the floating-point operations.
+            Args:
+            our_point: an x,y,z array
+            epsilon: needed for imprecisions in the floating-point operations.
 
             Returns:
             True if our_point exists outside of the hull, False otherwise.
 
         """
 
-        our_point = numpy.array(our_point)  # convert it to an numpy.array
+        our_point = np.array(our_point)  # convert it to an np.array
         for triangle in triangles:
             # vector from triangle corner 0 to point
             rel_point = our_point - triangle[0]
@@ -502,11 +496,11 @@ class ConvexHull:
             vec1 = triangle[1] - triangle[0]
             # vector from triangle corner 1 to corner 2
             vec2 = triangle[2] - triangle[1]
-            our_cross = numpy.cross(vec1, vec2)  # cross product between vec1 and vec2
+            our_cross = np.cross(vec1, vec2)  # cross product between vec1 and vec2
             # dot product to determine whether cross is point inward or outward
-            our_dot = numpy.dot(rel_point, our_cross)
+            our_dot = np.dot(rel_point, our_cross)
             # if the dot is greater than 0, then its outside
-            if numpy.dot(rel_point, our_cross) > epsilon:
+            if np.dot(rel_point, our_cross) > epsilon:
                 return True
 
         return False
@@ -520,10 +514,10 @@ class ConvexHull:
         dictionary yet). This function looks up and returns the value of a
         seg_index from seg_dict.
 
-            Arguments:
-            seg_dict -- the dictionary of segment 2x3 tuples as keys, integers
+            Args:
+            seg_dict: the dictionary of segment 2x3 tuples as keys, integers
                 as values.
-            seg_index -- the key of the dictionary member we are going to
+            seg_index: the key of the dictionary member we are going to
                 retrieve.
 
             Returns:
@@ -553,10 +547,10 @@ class ConvexHull:
         dictionary yet). This function increments the values within seg_dict,
         or initiates them if they dont exist yet.
 
-            Arguments:
-            seg_dict -- the dictionary of segment 2x3 tuples as keys, integers
+            Args:
+            seg_dict: the dictionary of segment 2x3 tuples as keys, integers
                 as values.
-            seg_index -- the key of the dictionary member we are going to
+            seg_index: the key of the dictionary member we are going to
                 increment.
 
         """
@@ -580,8 +574,8 @@ class ConvexHull:
     def gift_wrapping_3d(self, raw_points):
         """Gift wrapping for 3d convex hull.
 
-        Arguments:
-        raw_points -- A nx3 array of points, where each row corresponds to
+        Args:
+        raw_points: A nx3 array of points, where each row corresponds to
             an x,y,z point coordinate.
 
         Returns:
@@ -593,9 +587,9 @@ class ConvexHull:
 
         """
 
-        n = numpy.shape(raw_points)[0]  # number of points
+        n = np.shape(raw_points)[0]  # number of points
         point1 = raw_points[0]  # take the first point
-        xaxis = numpy.array([1, 0, 0])  # create a ref vector pointing along x axis
+        xaxis = np.array([1, 0, 0])  # create a ref vector pointing along x axis
         maxx = raw_points[0][0]  # initiate highest x value
         points = []  # a list of tuples for easy dictionary lookup
         seg_dict = {}  # a dictionary that contains the number of triangles a seg is in
@@ -608,17 +602,17 @@ class ConvexHull:
                 point1 = raw_points[i]
 
         best_dot = -1.0  # initiate dot relative to x-axis
-        point2 = numpy.array(raw_points[1])  # initiate best segment
+        point2 = np.array(raw_points[1])  # initiate best segment
 
         # find first/best segment
         for i in range(n):
             pointi = raw_points[i]
-            if numpy.array_equal(pointi, point1):
+            if np.array_equal(pointi, point1):
                 continue
             diff_vec = pointi - point1
-            diff_len = numpy.linalg.norm(diff_vec)
+            diff_len = np.linalg.norm(diff_vec)
 
-            test_dot = numpy.dot(diff_vec / diff_len, xaxis)
+            test_dot = np.dot(diff_vec / diff_len, xaxis)
             if test_dot > best_dot:
                 best_dot = test_dot
                 point2 = pointi
@@ -647,8 +641,8 @@ class ConvexHull:
             seg = seg_list.pop()  # take a segment out of the seg_list
             tuple1 = seg[0]  # the two ends of the segment
             tuple2 = seg[1]
-            point1 = numpy.array(seg[0])
-            point2 = numpy.array(seg[1])
+            point1 = np.array(seg[0])
+            point2 = np.array(seg[1])
             result = self.get_seg_dict_num(seg_dict, (seg[0], seg[1]))
 
             if result >= 2:  # then we already have 2 triangles on this segment
@@ -667,7 +661,7 @@ class ConvexHull:
                 diff_vec1 = point2 - point1
                 diff_vec2 = pointi - point2
 
-                test_cross = numpy.array(
+                test_cross = np.array(
                     [
                         diff_vec1[1] * diff_vec2[2] - diff_vec1[2] * diff_vec2[1],
                         diff_vec1[2] * diff_vec2[0] - diff_vec1[0] * diff_vec2[2],
@@ -675,9 +669,9 @@ class ConvexHull:
                     ]
                 )  # cross product
 
-                # numpy.linalg.norm(test_cross) # get the norm of the cross
+                # np.linalg.norm(test_cross) # get the norm of the cross
                 # product
-                test_cross_len = numpy.sqrt(
+                test_cross_len = np.sqrt(
                     test_cross[0] * test_cross[0]
                     + test_cross[1] * test_cross[1]
                     + test_cross[2] * test_cross[2]
@@ -686,7 +680,7 @@ class ConvexHull:
                 if test_cross_len <= 0.0:
                     continue
                 test_cross = test_cross / test_cross_len
-                dot_cross = numpy.dot(test_cross, ref_vec)
+                dot_cross = np.dot(test_cross, ref_vec)
                 if dot_cross > best_dot_cross:
                     best_cross = test_cross
                     best_dot_cross = dot_cross
@@ -717,9 +711,7 @@ class ConvexHull:
             seg_list.add((tuple1, tuple3))
             norm_dict[(tuple1, tuple3)] = best_cross
 
-            triangles.append(
-                (numpy.array(tuple1), numpy.array(tuple2), numpy.array(tuple3))
-            )
+            triangles.append((np.array(tuple1), np.array(tuple2), np.array(tuple3)))
 
             first_time = False
 
@@ -732,8 +724,8 @@ class ConvexHull:
         they are not part of the convex hull. This causes any expected running
         time for a convex hull algorithm to be reduced to linear time.
 
-            Arguments:
-            points -- An nx3 array of x,y,z coordinates
+            Args:
+            points: An nx3 array of x,y,z coordinates
 
             Returns:
             All members of original set of points that fall outside the
@@ -763,14 +755,14 @@ class ConvexHull:
                 z_low = point
 
         octahedron = [  # define the triangles of the surfaces of the octahedron
-            numpy.array((x_high, y_high, z_high)),
-            numpy.array((x_high, z_low, y_high)),
-            numpy.array((x_high, y_low, z_low)),
-            numpy.array((x_high, z_high, y_low)),
-            numpy.array((x_low, y_low, z_high)),
-            numpy.array((x_low, z_low, y_low)),
-            numpy.array((x_low, y_high, z_low)),
-            numpy.array((x_low, z_high, y_high)),
+            np.array((x_high, y_high, z_high)),
+            np.array((x_high, z_low, y_high)),
+            np.array((x_high, y_low, z_low)),
+            np.array((x_high, z_high, y_low)),
+            np.array((x_low, y_low, z_high)),
+            np.array((x_low, z_low, y_low)),
+            np.array((x_low, y_high, z_low)),
+            np.array((x_low, z_high, y_high)),
         ]
         new_points = []  # everything outside of the octahedron
 
@@ -780,7 +772,7 @@ class ConvexHull:
             if outside:
                 new_points.append(point)
 
-        return numpy.array(new_points)  # convert back to an array
+        return np.array(new_points)  # convert back to an array
 
 
 # Some classes are required for multiprocessing
@@ -879,10 +871,10 @@ class BoxOfPoints:
     def __init__(self, box, reso):
         """Initialize the class.
 
-        Arguments:
-        box -- A numpy array representing two 3D points, (min_x, min_y,
+        Args:
+        box: A numpy array representing two 3D points, (min_x, min_y,
             min_z) and (max_x, max_y, max_z), that define a box.
-        reso -- The space between the points of the box, in the X, Y, and
+        reso: The space between the points of the box, in the X, Y, and
             Z direction.
 
         """
@@ -896,15 +888,15 @@ class BoxOfPoints:
         max_y = self.__snap_float(box[1][1], reso) + 1.1 * reso
         max_z = self.__snap_float(box[1][2], reso) + 1.1 * reso
 
-        x, y, z = numpy.mgrid[min_x:max_x:reso, min_y:max_y:reso, min_z:max_z:reso]
-        self.points = numpy.array(list(zip(x.ravel(), y.ravel(), z.ravel())))
+        x, y, z = np.mgrid[min_x:max_x:reso, min_y:max_y:reso, min_z:max_z:reso]
+        self.points = np.array(list(zip(x.ravel(), y.ravel(), z.ravel())))
 
     def __snap_float(self, val, reso):
         """Snaps an arbitrary point to the nearest grid point.
 
-        Arguments:
-        val -- A numpy array corresponding to a 3D point.
-        reso -- The resolution (distance in the X, Y, and Z directions
+        Args:
+        val: A numpy array corresponding to a 3D point.
+        reso: The resolution (distance in the X, Y, and Z directions
             between adjacent points) of the grid.
 
         Returns:
@@ -913,21 +905,19 @@ class BoxOfPoints:
 
         """
 
-        return numpy.floor(val / reso) * reso
+        return np.floor(val / reso) * reso
 
     def remove_points_outside_convex_hull(self, hull):
         """Removes box points that are outside a convex hull.
 
-        Arguments:
-        hull -- The convex hull.
+        Args:
+        hull: The convex hull.
 
         """
 
-        chunks = [
-            (hull, t) for t in numpy.array_split(self.points, params["processors"])
-        ]
+        chunks = [(hull, t) for t in np.array_split(self.points, params["processors"])]
         tmp = MultiThreading(chunks, params["processors"], self.__MultiIdHullPts)
-        self.points = numpy.vstack(tmp.results)
+        self.points = np.vstack(tmp.results)
 
     class __MultiIdHullPts(GeneralTask):
         """A class to remove points outside a convex hull using multiple
@@ -951,15 +941,15 @@ class BoxOfPoints:
             if len(new_pts) == 0:
                 pass  # here save the results for later compilation
             else:
-                self.results.append(numpy.array(new_pts))
+                self.results.append(np.array(new_pts))
 
     def remove_all_points_close_to_other_points(self, other_points, dist_cutoff):
         """Removes all points in this box that come within the points specified
         in a numpy array
 
-            Arguments:
-            other_points -- A numpy array containing the other points.
-            dist_cutoff -- A float, the cutoff distance to use in determining
+            Args:
+            other_points: A numpy array containing the other points.
+            dist_cutoff: A float, the cutoff distance to use in determining
                 whether or not box points will be removed.
 
         """
@@ -968,15 +958,13 @@ class BoxOfPoints:
         box_of_pts_distance_tree = spatial.KDTree(self.points)
         chunks = [
             (box_of_pts_distance_tree, dist_cutoff, t)
-            for t in numpy.array_split(other_points, params["processors"])
+            for t in np.array_split(other_points, params["processors"])
         ]
         tmp = MultiThreading(chunks, params["processors"], self.__MultiGetClosePoints)
-        indicies_of_box_pts_close_to_molecule_points = numpy.unique(
-            numpy.hstack(tmp.results)
-        )
+        indices_of_box_pts_close_to_molecule_points = np.unique(np.hstack(tmp.results))
 
-        self.points = numpy.delete(
-            self.points, indicies_of_box_pts_close_to_molecule_points, axis=0
+        self.points = np.delete(
+            self.points, indices_of_box_pts_close_to_molecule_points, axis=0
         )  # remove the ones that are too close to molecule atoms
 
     class __MultiGetClosePoints(GeneralTask):
@@ -995,17 +983,17 @@ class BoxOfPoints:
             sparce_distance_matrix = other_points_distance_tree.sparse_distance_matrix(
                 box_of_pts_distance_tree, dist_cutoff
             )
-            indicies_of_box_pts_close_to_molecule_points = numpy.unique(
+            indices_of_box_pts_close_to_molecule_points = np.unique(
                 sparce_distance_matrix.tocsr().indices
             )
 
-            self.results.append(indicies_of_box_pts_close_to_molecule_points)
+            self.results.append(indices_of_box_pts_close_to_molecule_points)
 
     def to_pdb(self, let="X"):
         """Converts the points in this box into a PDB representation.
 
-        Arguments:
-        let -- An optional string, the chain ID to use. "X" by default.
+        Args:
+        let: An optional string, the chain ID to use. "X" by default.
 
         Returns:
         A PDB-formatted string.
@@ -1018,41 +1006,41 @@ class BoxOfPoints:
         """Add points to the current box that surround existing points,
         essentially increasing the resolution of the box.
 
-            Arguments:
-            num_pts -- An int, the number of points to place on each side of
+            Args:
+            num_pts: An int, the number of points to place on each side of
                 the existing points, in the X, Y, and Z directions.
-            reso -- The distance between adjacent added points.
+            reso: The distance between adjacent added points.
 
         """
 
         new_pts = []
 
-        i = numpy.arange(-num_pts * reso, num_pts * reso + reso * 0.01, reso)
+        i = np.arange(-num_pts * reso, num_pts * reso + reso * 0.01, reso)
         for xi in i:
             for yi in i:
                 for zi in i:
-                    vec = numpy.array([xi, yi, zi])
+                    vec = np.array([xi, yi, zi])
                     new_pts.append(self.points + vec)
-        self.points = numpy.vstack(new_pts)
+        self.points = np.vstack(new_pts)
 
         self.__unique_points()
 
     def __unique_points(self):
         """Identifies unique points (rows) in an array of points.
 
-        Arguments:
-        a -- A nx3 numpy.array representing 3D points.
+        Args:
+        a: A nx3 np.array representing 3D points.
 
         Returns:
-        A nx2 numpy.array containing the 3D points that are unique.
+        A nx2 np.array containing the 3D points that are unique.
 
         """
 
-        b = numpy.ascontiguousarray(self.points).view(
-            numpy.dtype((numpy.void, self.points.dtype.itemsize * self.points.shape[1]))
+        b = np.ascontiguousarray(self.points).view(
+            np.dtype((np.void, self.points.dtype.itemsize * self.points.shape[1]))
         )
         unique_points = (
-            numpy.unique(b).view(self.points.dtype).reshape(-1, self.points.shape[1])
+            np.unique(b).view(self.points.dtype).reshape(-1, self.points.shape[1])
         )
 
         self.points = unique_points
@@ -1061,9 +1049,9 @@ class BoxOfPoints:
         """Keep removing points that don't have enough neighbors, until no
         such points exist.
 
-        Arguments:
-        reso -- The distance between adjacent points.
-        number_of_neighbors -- The minimum number of permissible neighbors.
+        Args:
+        reso: The distance between adjacent points.
+        number_of_neighbors: The minimum number of permissible neighbors.
 
         """
 
@@ -1073,11 +1061,11 @@ class BoxOfPoints:
 
         # so kiddy-corner counted as a neighbor
         self.dist_matrix = box_of_pts_distance_tree.sparse_distance_matrix(
-            box_of_pts_distance_tree, reso * numpy.sqrt(3.0) * 1.1
+            box_of_pts_distance_tree, reso * np.sqrt(3.0) * 1.1
         ).todense()
 
         # note that the diagnol of self.dist_matrix is zero, as expected, but
-        # ones with dist > reso * numpy.sqrt(3.0) * 1.1 are also 0. Pretty
+        # ones with dist > reso * np.sqrt(3.0) * 1.1 are also 0. Pretty
         # convenient.
 
         num_pts = 0
@@ -1086,11 +1074,11 @@ class BoxOfPoints:
             num_pts = len(self.points)
 
             # identify the points that have enough neighbors
-            columns_nonzero_count = numpy.array((self.dist_matrix != 0).sum(0))[0]
+            columns_nonzero_count = np.array((self.dist_matrix != 0).sum(0))[0]
             columns_nonzero_count_match_criteria = (
                 columns_nonzero_count >= number_of_neighbors
             )
-            columns_nonzero_count_match_criteria_index = numpy.nonzero(
+            columns_nonzero_count_match_criteria_index = np.nonzero(
                 columns_nonzero_count_match_criteria
             )
 
@@ -1129,7 +1117,7 @@ class BoxOfPoints:
         # Keep going until there are no more points that need to be assigned
         # to a pocket.
         while len(self.points) != 0:
-            pocket_indexes = numpy.array([0])
+            pocket_indexes = np.array([0])
             num_pts_in_pocket = 0
 
             # Keep looping into no new unique pockets are added.
@@ -1137,26 +1125,26 @@ class BoxOfPoints:
                 num_pts_in_pocket = len(pocket_indexes)
 
                 # Get all the adjacent points
-                indecies_of_neighbors = numpy.nonzero(
-                    self.dist_matrix[pocket_indexes, :]
-                )[1]
+                indices_of_neighbors = np.nonzero(self.dist_matrix[pocket_indexes, :])[
+                    1
+                ]
 
                 # Get one of them. Not sure why this was previously in the code...
-                # if len(indecies_of_neighbors) > 0:
+                # if len(indices_of_neighbors) > 0:
                 # In case a point has no neighbors, you need this conditional.
-                # one_index_of_neighbor = numpy.array(indecies_of_neighbors)[0]
+                # one_index_of_neighbor = np.array(indices_of_neighbors)[0]
 
                 # Add that one index to the growing list.
-                pocket_indexes = numpy.hstack(
+                pocket_indexes = np.hstack(
                     (
                         pocket_indexes,
-                        indecies_of_neighbors,
+                        indices_of_neighbors,
                         # one_index_of_neighbor  # Not sure why it used to be this.
                     )
                 )
 
-                # Make sure only unique indecies ones are retained.
-                pocket_indexes = numpy.unique(pocket_indexes)
+                # Make sure only unique indices ones are retained.
+                pocket_indexes = np.unique(pocket_indexes)
 
             # Save these points (in the pocket) to a list of pockets.
             pocket = self.points[pocket_indexes, :]
@@ -1174,12 +1162,12 @@ class BoxOfPoints:
         """A support function"""
 
         # keep only those points
-        self.points = numpy.delete(self.points, pt_indices, axis=0)
+        self.points = np.delete(self.points, pt_indices, axis=0)
 
         # update the distance matrix so it doesn't need to be recalculated
-        self.dist_matrix = numpy.delete(self.dist_matrix, pt_indices, axis=0)
+        self.dist_matrix = np.delete(self.dist_matrix, pt_indices, axis=0)
         self.dist_matrix = self.dist_matrix.T
-        self.dist_matrix = numpy.delete(self.dist_matrix, pt_indices, axis=0)
+        self.dist_matrix = np.delete(self.dist_matrix, pt_indices, axis=0)
 
 
 # Also, you need a class to save numpy arrays as PDB files
@@ -1191,11 +1179,11 @@ class write_pdbs:
     def __create_pdb_line(self, numpy_array, index, resname, letter):
         """Create a string formatted according to the PDB standard.
 
-        Arguments:
-        numpy_array -- A 1x3 numpy.array representing a 3D point.
-        index -- An integer, the atom index to use in the string.
-        resname -- A string, the RESNAME to use.
-        letter -- A string, the atom name/chain/etc to use for the output.
+        Args:
+        numpy_array: A 1x3 np.array representing a 3D point.
+        index: An integer, the atom index to use in the string.
+        resname: A string, the RESNAME to use.
+        letter: A string, the atom name/chain/etc to use for the output.
 
         Returns:
         A string, formatted according to the PDB standard.
@@ -1203,7 +1191,7 @@ class write_pdbs:
         """
 
         if len(numpy_array) == 2:
-            numpy_array = numpy.array([numpy_array[0], numpy_array[1], 0.0])
+            numpy_array = np.array([numpy_array[0], numpy_array[1], 0.0])
         if numpy_array.shape == (1, 3):
             numpy_array = numpy_array[0]
 
@@ -1226,10 +1214,10 @@ class write_pdbs:
     def numpy_to_pdb(self, narray, letter, resname=""):
         """Create a string formatted according to the PDB standard.
 
-        Arguments:
-        narray -- A nx3 numpy.array representing a 3D point.
-        letter -- A string, the atom name/chain/etc to use for the output.
-        resname -- An optional string, the RESNAME to use for the output.
+        Args:
+        narray: A nx3 np.array representing a 3D point.
+        letter: A string, the atom name/chain/etc to use for the output.
+        resname: An optional string, the RESNAME to use for the output.
 
         Returns:
         A string, formatted according to the PDB standard.
@@ -1576,24 +1564,22 @@ def run_pocket_id(parameters):
 
         pts_string = ""
         for cluster_num in range(params["number_of_spheres"]):
-            indexes_for_this_cluster = numpy.nonzero(idx == cluster_num)[0]
+            indexes_for_this_cluster = np.nonzero(idx == cluster_num)[0]
             cluster_pts = pts[indexes_for_this_cluster]
-            cluster_center = numpy.mean(cluster_pts, axis=0)
+            cluster_center = np.mean(cluster_pts, axis=0)
             try:
-                cluster_radius = numpy.max(
-                    cdist(numpy.array([cluster_center]), cluster_pts)
-                )
+                cluster_radius = np.max(cdist(np.array([cluster_center]), cluster_pts))
                 f.write(
                     "REMARK CHAIN "
                     + let_ids[cluster_num]
                     + ": PointsInclusionSphere "
-                    + str(numpy.round(cluster_center[0], 2))
+                    + str(np.round(cluster_center[0], 2))
                     + " "
-                    + str(numpy.round(cluster_center[1], 2))
+                    + str(np.round(cluster_center[1], 2))
                     + " "
-                    + str(numpy.round(cluster_center[2], 2))
+                    + str(np.round(cluster_center[2], 2))
                     + " "
-                    + str(numpy.round(cluster_radius + params["sphere_padding"], 2))
+                    + str(np.round(cluster_radius + params["sphere_padding"], 2))
                     + "\n"
                 )
                 pts_string = pts_string + write_some_pdbs.numpy_to_pdb(

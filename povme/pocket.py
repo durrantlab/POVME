@@ -1,5 +1,6 @@
 from typing import Any
 
+import np.typing as npt
 import numpy as np
 from scipy import spatial
 
@@ -12,7 +13,7 @@ params: dict[str, Any] = {}
 class BoxOfPoints:
     """A class representing a box of equidistant points."""
 
-    def __init__(self, box, reso):
+    def __init__(self, box: npt.NDArray[np.float64], reso: int) -> None:
         """Initialize the class.
 
         Args:
@@ -20,7 +21,6 @@ class BoxOfPoints:
                 min_z) and (max_x, max_y, max_z), that define a box.
             reso: The space between the points of the box, in the X, Y, and
                 Z direction.
-
         """
 
         self.write_pdbs = write_pdbs()
@@ -35,7 +35,9 @@ class BoxOfPoints:
         x, y, z = np.mgrid[min_x:max_x:reso, min_y:max_y:reso, min_z:max_z:reso]
         self.points = np.array(list(zip(x.ravel(), y.ravel(), z.ravel())))
 
-    def __snap_float(self, val, reso):
+    def __snap_float(
+        self, val: npt.NDArray[np.float64], reso: int
+    ) -> npt.NDArray[np.float64]:
         """Snaps an arbitrary point to the nearest grid point.
 
         Args:
@@ -46,7 +48,6 @@ class BoxOfPoints:
         Returns:
             A numpy array corresponding to a 3D point near val that is on a
                 nearby grid point.
-
         """
 
         return np.floor(val / reso) * reso
@@ -56,9 +57,7 @@ class BoxOfPoints:
 
         Args:
             hull: The convex hull.
-
         """
-
         chunks = [(hull, t) for t in np.array_split(self.points, params["processors"])]
         tmp = MultiThreading(chunks, params["processors"], self.__MultiIdHullPts)
         self.points = np.vstack(tmp.results)
@@ -74,7 +73,7 @@ class BoxOfPoints:
             hull = items[0]
             some_points = items[1]
 
-            # Note this would be much faster if it were matrix-based intead of
+            # Note this would be much faster if it were matrix-based instead of
             # point-by-point based. Can preallocate numpy array size because I
             # don't know beforehand how many points will be in the hull
             new_pts = []
@@ -87,7 +86,9 @@ class BoxOfPoints:
             else:
                 self.results.append(np.array(new_pts))
 
-    def remove_all_points_close_to_other_points(self, other_points, dist_cutoff):
+    def remove_all_points_close_to_other_points(
+        self, other_points: npt.NDArray[np.float64], dist_cutoff: float
+    ) -> None:
         """Removes all points in this box that come within the points specified
         in a numpy array
 
@@ -105,10 +106,10 @@ class BoxOfPoints:
             for t in np.array_split(other_points, params["processors"])
         ]
         tmp = MultiThreading(chunks, params["processors"], self.__MultiGetClosePoints)
-        indicies_of_box_pts_close_to_molecule_points = np.unique(np.hstack(tmp.results))
+        indices_of_box_pts_close_to_molecule_points = np.unique(np.hstack(tmp.results))
 
         self.points = np.delete(
-            self.points, indicies_of_box_pts_close_to_molecule_points, axis=0
+            self.points, indices_of_box_pts_close_to_molecule_points, axis=0
         )  # remove the ones that are too close to molecule atoms
 
     class __MultiGetClosePoints(GeneralTask):
@@ -127,11 +128,11 @@ class BoxOfPoints:
             sparce_distance_matrix = other_points_distance_tree.sparse_distance_matrix(
                 box_of_pts_distance_tree, dist_cutoff
             )
-            indicies_of_box_pts_close_to_molecule_points = np.unique(
+            indices_of_box_pts_close_to_molecule_points = np.unique(
                 sparce_distance_matrix.tocsr().indices
             )
 
-            self.results.append(indicies_of_box_pts_close_to_molecule_points)
+            self.results.append(indices_of_box_pts_close_to_molecule_points)
 
     def to_pdb(self, let="X"):
         """Converts the points in this box into a PDB representation.
@@ -240,7 +241,7 @@ class BoxOfPoints:
         self.dist_matrix = self.dist_matrix[pt_indices, :][0]
         # self.dist_matrix = self.dist_matrix.T # not necessary because it's a symetrical matrix
 
-    def separate_out_pockets(self):
+    def separate_out_pockets(self) -> list[npt.NDArray[np.float64]]:
         """Separate the points according to the pocket they belong to.
         Determined by looking at patches of contiguous points.
 
@@ -254,7 +255,7 @@ class BoxOfPoints:
 
         # self.points is an array of 3D points
 
-        # self.dist_matrix is a distance matrixs. self.dist_matrix[i,j] is
+        # self.dist_matrix is a distance matrix. self.dist_matrix[i,j] is
         # distance between points i and j. But it only contains distances if
         # the points are close (neighbors). Otherwise, 0.
 
@@ -269,25 +270,25 @@ class BoxOfPoints:
                 num_pts_in_pocket = len(pocket_indexes)
 
                 # Get all the adjacent points
-                indecies_of_neighbors = np.nonzero(self.dist_matrix[pocket_indexes, :])[
+                indices_of_neighbors = np.nonzero(self.dist_matrix[pocket_indexes, :])[
                     1
                 ]
 
                 # Get one of them. Not sure why this was previously in the code...
-                # if len(indecies_of_neighbors) > 0:
+                # if len(indices_of_neighbors) > 0:
                 # In case a point has no neighbors, you need this conditional.
-                # one_index_of_neighbor = np.array(indecies_of_neighbors)[0]
+                # one_index_of_neighbor = np.array(indices_of_neighbors)[0]
 
                 # Add that one index to the growing list.
                 pocket_indexes = np.hstack(
                     (
                         pocket_indexes,
-                        indecies_of_neighbors,
+                        indices_of_neighbors,
                         # one_index_of_neighbor  # Not sure why it used to be this.
                     )
                 )
 
-                # Make sure only unique indecies ones are retained.
+                # Make sure only unique indices ones are retained.
                 pocket_indexes = np.unique(pocket_indexes)
 
             # Save these points (in the pocket) to a list of pockets.
