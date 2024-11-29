@@ -4,11 +4,11 @@ from functools import reduce
 
 import numpy as np
 import numpy.typing as npt
+from loguru import logger
 from scipy.spatial.distance import cdist, pdist, squareform
 
 from . import pymolecule
 from .io import gzopenfile, numpy_to_pdb, openfile, write_to_file
-from .logger import log
 from .parallel import MultithreadingTaskGeneral
 
 
@@ -396,7 +396,7 @@ class MultithreadingCalcVolumeTask(MultithreadingTaskGeneral):
             pts_deleted = pts.copy()
 
         # you may need to load it from disk if the user so specified
-        if parameters["UseDiskNotMemory"]:  # so you need to load it from disk
+        if config.use_disk_not_memory:  # so you need to load it from disk
             pym_filename = pdb
             pdb = pymolecule.Molecule()
             pdb.fileio.load_pym_into(pym_filename)
@@ -598,27 +598,21 @@ class MultithreadingCalcVolumeTask(MultithreadingTaskGeneral):
 
             frame_text = frame_text + "END\n"
 
-            if parameters["CompressOutput"]:
+            if config.compress_output:
                 fl = gzopenfile(
-                    parameters["OutputFilenamePrefix"]
-                    + "frame_"
-                    + str(frame_indx)
-                    + ".pdb.gz",
+                    output_prefix + "frame_" + str(frame_indx) + ".pdb.gz",
                     "wb",
                 )
             else:
                 fl = openfile(
-                    parameters["OutputFilenamePrefix"]
-                    + "frame_"
-                    + str(frame_indx)
-                    + ".pdb",
+                    output_prefix + "frame_" + str(frame_indx) + ".pdb",
                     "w",
                 )
-            write_to_file(fl, frame_text, encode=parameters["CompressOutput"])
+            write_to_file(fl, frame_text, encode=config.compress_output)
             fl.close()
 
         extra_data_to_add = {}
-        if parameters["SaveVolumetricDensityMap"]:
+        if config.save_volumetric_density_map:
             extra_data_to_add["SaveVolumetricDensityMap"] = pts
 
         self.results.append((frame_indx, volume, extra_data_to_add))

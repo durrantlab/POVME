@@ -15,6 +15,22 @@ class Region:
 
         self.region_type = "SPHERE"  # could also be BOX
 
+    def make_sphere(self, data):
+        self.center[0] = data[0]
+        self.center[1] = data[1]
+        self.center[2] = data[2]
+        self.radius = data[3]
+        self.region_type = "SPHERE"
+
+    def make_box(self, data):
+        self.center[0] = data[0]
+        self.center[1] = data[1]
+        self.center[2] = data[2]
+        self.box_dimen[0] = data[3]
+        self.box_dimen[1] = data[4]
+        self.box_dimen[2] = data[5]
+        self.region_type = "BOX"
+
     def __str__(self):
         """Returns a string representation of the region."""
 
@@ -51,12 +67,12 @@ class Region:
         """Snaps a set of points to a fixed grid.
 
         Args:
-        pts: A nx3 np.array representing 3D points.
-        reso: A float, the resolution of the grid.
+            pts: A nx3 np.array representing 3D points.
+            reso: A float, the resolution of the grid.
 
         Returns:
-        A nx3 np.array with the 3D points snapped to the nearest grid
-            point.
+            A nx3 np.array with the 3D points snapped to the nearest grid
+                point.
 
         """
 
@@ -73,11 +89,11 @@ class Region:
         points.
 
         Args:
-        reso: A float, the resolution of the grid on which the points will
-            be placed.
+            reso: A float, the resolution of the grid on which the points will
+                be placed.
 
         Returns:
-        A nx3 np.array with the 3D points filling the region.
+            A nx3 np.array with the 3D points filling the region.
 
         """
 

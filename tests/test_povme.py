@@ -2,20 +2,16 @@ import glob
 import os
 import shutil
 
-from povme import RunPOVME
+from povme import POVME
 
 
-def test_4nss(path_4nss_input, path_4nss_output):
+def test_4nss(path_4nss_config, path_4nss_output):
     dir_output = os.path.dirname(path_4nss_output)
     if os.path.exists(dir_output):
         shutil.rmtree(dir_output)
 
-    run_povme = RunPOVME(
-        path_4nss_input,
-        path_pdb="./tests/files/4nss/4nss.pdb",
-        output_prefix=path_4nss_output,
-    )
-    results = run_povme.results
+    povme = POVME(path_4nss_config)
+    results = povme.run("./tests/files/4nss/4nss.pdb", path_4nss_output)
 
     expected_vols = set([1673.0, 1493.0, 1711.0, 1854.0, 2023.0])
     actual_vols = set(results.values())

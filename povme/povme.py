@@ -2,29 +2,30 @@ from typing import Any
 
 import os
 import shutil
+import sys
 import time
 from io import StringIO
 
 import numpy as np
+from loguru import logger
 from scipy.spatial.distance import cdist
 
 from . import pymolecule
-from .config import ConfigFile
+from .config import POVMEConfig
 from .hull import MultithreadingCalcVolumeTask
-from .io import dx_freq, fix_filename, gzopenfile, numpy_to_pdb, openfile, write_to_file
-from .logger import log
+from .io import dx_freq, gzopenfile, numpy_to_pdb, openfile, write_to_file
 from .parallel import MultiThreading, MultithreadingTaskGeneral
 from .region import Region
 
 
-def unique_rows(a):
+def get_unique_rows(a):
     """Identifies unique points (rows) in an array of points.
 
     Arguments:
-    a -- A nx3 numpy.array representing 3D points.
+        a: A nx3 numpy.array representing 3D points.
 
     Returns:
-    A nx2 numpy.array containing the 3D points that are unique.
+        A nx2 numpy.array containing the 3D points that are unique.
 
     """
 
@@ -49,17 +50,17 @@ class MultithreadingStringToMoleculeTask(MultithreadingTaskGeneral):
 
         pdb_string = item[0]
         index = item[1]
-        parameters = item[2]
+        config = item[2]
 
         # make the pdb object
         str_obj = StringIO(pdb_string)
         tmp = pymolecule.Molecule()
         tmp.fileio.load_pdb_into_using_file_object(str_obj, False, False, False)
 
-        log("\tFurther processing frame " + str(index), parameters)
+        logger.debug("\tFurther processing frame " + str(index))
 
         # so load the whole trajectory into memory
-        if not parameters["UseDiskNotMemory"]:
+        if not config.use_disk_not_memory:
             self.results.append((index, tmp))
         else:  # save to disk, record filename
             pym_filename = f"./.povme_tmp/frame_{str(index)}.pym"
@@ -67,38 +68,30 @@ class MultithreadingStringToMoleculeTask(MultithreadingTaskGeneral):
             self.results.append((index, pym_filename))
 
 
-class RunPOVME:
+class POVME:
     """The main class to run POVME."""
 
-    def reference(self, parameters, before=""):
-        """Print out a message regarding terms of use."""
+    def __init__(
+        self,
+        path_config: str | None = None,
+    ) -> None:
+        """Initialize POVME.
 
-        log("", parameters)
-        log(
-            before
-            + "If you use POVME in your research, please cite the following reference:",
-            parameters,
-        )
-        log(
-            before
-            + '  Durrant, J. D., C. A. de Oliveira, et al. (2011). "POVME: An algorithm',
-            parameters,
-        )
-        log(
-            before
-            + '  for measuring binding-pocket volumes." J Mol Graph Model 29(5): 773-776.',
-            parameters,
-        )
+        Args:
+            path_config: Path to a configuration YAML file.
+        """
 
-    def load_multi_frame_pdb(self, filename, parameters):
+        self.config = POVMEConfig()
+        if path_config is not None:
+            self.config.from_yaml(path_config)
+
+    def load_multi_frame_pdb(self, filename, config):
         """Load a multi-frame PDB into memory or into separate files
         (depending on user specifications).
 
         Args:
             filename: A string, the filename of the multi-frame PDB.
-            parameters: A python dictionary, where the keys are the user-defined
-                parameter names and the values are the corresponding parameter
-                values.
+            config: POVMEConfig object.
 
         Returns:
             If the user has requested that the disk be used to save memory, this
@@ -114,15 +107,10 @@ class RunPOVME:
         pdb_strings = []
         growing_string = ""
 
-        log("", parameters)
-        log("Reading frames from " + filename, parameters)
+        logger.info("Reading frames from " + filename)
 
         f = open(filename, "rb")
         while True:
-
-            if parameters["NumFrames"] != -1:
-                if len(pdb_strings) >= parameters["NumFrames"]:
-                    break
 
             line = f.readline()
 
@@ -142,438 +130,298 @@ class RunPOVME:
 
         # now convert each pdb string into a pymolecule.Molecule object
         molecules = MultiThreading(
-            [
-                (pdb_strings[idx], idx + 1, parameters)
-                for idx in range(len(pdb_strings))
-            ],
-            parameters["NumProcessors"],
+            [(pdb_strings[idx], idx + 1, config) for idx in range(len(pdb_strings))],
+            config.num_processors,
             MultithreadingStringToMoleculeTask,
         )
         molecules = molecules.results
 
         return molecules
 
-    def __init__(
+    @staticmethod
+    def _get_regions_include(config):
+        regions = []
+        for inclusion_sphere in config.points_inclusion_sphere:
+            if len(inclusion_sphere) == 0:
+                continue
+            region = Region()
+            region.make_sphere(inclusion_sphere)
+            regions.append(region)
+        for inclusion_box in config.points_inclusion_box:
+            if len(inclusion_box) == 0:
+                continue
+            region = Region()
+            region.make_box(inclusion_box)
+            regions.append(region)
+        return regions
+
+    @staticmethod
+    def _get_regions_contig(config):
+        regions = []
+        for contig_sphere in config.contiguous_pocket_seed_sphere:
+            if len(contig_sphere) == 0:
+                continue
+            region = Region()
+            region.make_sphere(contig_sphere)
+            regions.append(region)
+        for contig_box in config.contiguous_pocket_seed_box:
+            if len(contig_box) == 0:
+                continue
+            region = Region()
+            region.make_box(contig_box)
+            regions.append(region)
+        return regions
+
+    @staticmethod
+    def _get_regions_exclude(config):
+        regions = []
+        for exclusion_sphere in config.points_exclusion_sphere:
+            if len(exclusion_sphere) == 0:
+                continue
+            region = Region()
+            region.make_sphere(exclusion_sphere)
+            regions.append(region)
+        for exclusion_box in config.points_exclusion_box:
+            if len(exclusion_box) == 0:
+                continue
+            region = Region()
+            region.make_box(exclusion_box)
+            regions.append(region)
+        return regions
+
+    def gen_points(self, config):
+        logger.info("Generating the pocket-encompassing point field")
+
+        # get all the points of the inclusion regions
+        regions_include = self._get_regions_include(config)
+        pts = regions_include[0].points_set(config.grid_spacing)
+        for Included in regions_include[1:]:
+            pts = np.vstack((pts, Included.points_set(config.grid_spacing)))
+        pts = get_unique_rows(pts)
+
+        # get all the points of the exclusion regions
+        regions_exclude = self._get_regions_exclude(config)
+        if len(regions_exclude) > 0:
+            pts_exclusion = regions_exclude[0].points_set(config.grid_spacing)
+            for Excluded in regions_exclude[1:]:
+                pts_exclusion = np.vstack(
+                    (pts_exclusion, Excluded.points_set(config.grid_spacing))
+                )
+            pts_exclusion = get_unique_rows(pts_exclusion)
+
+            # remove the exclusion points from the inclusion points I
+            # think there ought to be a set-based way of doing this, but
+            # I'm going to go for the pairwise comparison. consider
+            # rewriting later
+            index_to_remove = np.nonzero(cdist(pts, pts_exclusion) < 1e-7)[0]
+            pts = np.delete(pts, index_to_remove, axis=0)
+
+        return pts
+
+    @staticmethod
+    def write_points(pts, output_prefix, config):
+        logger.info("Writing points to PDB file")
+        points_filename = output_prefix + "point_field.pdb"
+
+        if config.compress_output:
+            afile = gzopenfile(points_filename + ".gz", "wb")
+        else:
+            afile = openfile(points_filename, "w")
+
+        write_to_file(afile, numpy_to_pdb(pts, "X"), encode=config.compress_output)
+        afile.close()
+
+        # save the points as npy
+        logger.info("Writing points to NPY file")
+        np.save(points_filename + ".npy", pts)
+
+        logger.info(
+            "Point field saved to " + points_filename + " to permit visualization"
+        )
+        logger.info(
+            "Point field saved to "
+            + points_filename
+            + ".npy to optionally load for the volume calculation"
+        )
+
+    def write_points_contig(self, regions_contig, output_prefix, config):
+
+        # get all the contiguous points
+        contig_pts = regions_contig[0].points_set(config.grid_spacing)
+        for Contig in regions_contig[1:]:
+            contig_pts = np.vstack((contig_pts, Contig.points_set(config.grid_spacing)))
+        contig_pts = get_unique_rows(contig_pts)
+
+        logger.info("\nSaving the contiguous-pocket seed points as a PDB file")
+
+        points_filename = output_prefix + "contiguous_pocket_seed_points.pdb"
+
+        if config.compress_output:
+            afile = gzopenfile(points_filename + ".gz", "wb")
+        else:
+            afile = openfile(points_filename, "w")
+
+        write_to_file(
+            afile,
+            numpy_to_pdb(contig_pts, "X"),
+            encode=config.compress_output,
+        )
+        afile.close()
+
+        logger.info(
+            "Contiguous-pocket seed points saved to "
+            + points_filename
+            + " to permit visualization"
+        )
+
+    def compute_volume(self, pts, config):
+        # load the points in they aren't already present
+        if pts is None:
+            logger.info("Loading the point-field NPY file...")
+            parameters["pts_orig"] = np.load(parameters["LoadPointsFilename"])
+        else:
+            parameters["pts_orig"] = pts
+
+        # load the PDB frames
+        index_and_pdbs = self.load_multi_frame_pdb(
+            parameters["PDBFileName"], parameters
+        )
+
+        # calculate all the volumes
+        logger.info("Calculating the pocket volume of each frame")
+        tmp = MultiThreading(
+            [(index, pdb_object, config) for index, pdb_object in index_and_pdbs],
+            config.num_processors,
+            MultithreadingCalcVolumeTask,
+        )
+
+        # delete the temp swap directory if necessary
+        if config.use_disk_not_memory:
+            if os.path.exists("./.povme_tmp"):
+                shutil.rmtree("./.povme_tmp")
+
+        # display the results
+        results = {}
+        for result in tmp.results:
+            results[result[0]] = result[1]
+        logger.debug("FRAME        | VOLUME (A^3)")
+        logger.debug("-------------+-------------")
+        for i in sorted(results.keys()):
+            logger.debug(str(i).ljust(13) + "| " + str(results[i]))
+
+        logger.info("Execution time = " + str(time.time() - self.t_start) + " sec")
+        return results
+
+    def run(
         self,
-        path_config: str,
         path_pdb: str | None = None,
         output_prefix: str | None = None,
-    ) -> None:
+    ) -> dict[str, Any]:
         """Start POVME
 
         Args:
-            path_config: Path to configuration file.
             path_pdb: Path to PDB file. This will overwrite the configuration file.
             output_prefix: Path to output directory including directories.
         """
-        start_time = time.time()
+        self.t_start = time.time()
+        config = self.config
+        config.log()
 
-        config = ConfigFile(path_config)
-
-        # Process the config file
-        parameters: dict[str, Any] = {}
-
-        parameters["GridSpacing"] = 1.0  # default
-        parameters["PointsIncludeRegions"] = []
-        parameters["PointsExcludeRegions"] = []
-        parameters["SavePoints"] = False  # default
-        parameters["LoadPointsFilename"] = ""  # default
-        parameters["PDBFileName"] = ""  # default
-        # default is VDW radius of hydrogen
-        parameters["DistanceCutoff"] = 1.09
-        parameters["ConvexHullExclusion"] = True
-        parameters["ContiguousPocketSeedRegions"] = []
-        parameters["ContiguousPointsCriteria"] = 4
-        parameters["NumProcessors"] = 4
-        parameters["UseDiskNotMemory"] = False
-        parameters["OutputFilenamePrefix"] = (
-            "POVME_output."
-            + time.strftime("%m-%d-%y")
-            + "."
-            + time.strftime("%H-%M-%S")
-            + "/"
-        )
-        parameters["SaveIndividualPocketVolumes"] = False
-        parameters["SavePocketVolumesTrajectory"] = False
-        parameters["OutputEqualNumPointsPerFrame"] = False
-        parameters["SaveTabbedVolumeFile"] = False
-        parameters["SaveVolumetricDensityMap"] = False
-        parameters["CompressOutput"] = False
-        # This is a parameter for debugging purposes only.
-        parameters["NumFrames"] = -1
-
-        float_parameters = ["GridSpacing", "DistanceCutoff"]
-        boolean_parameters = [
-            "SavePoints",
-            "ConvexHullExclusion",
-            "CompressOutput",
-            "UseDiskNotMemory",
-            "SaveVolumetricDensityMap",
-            "OutputEqualNumPointsPerFrame",
-            "SaveIndividualPocketVolumes",
-            "SaveTabbedVolumeFile",
-            "SavePocketVolumesTrajectory",
-        ]
-        int_parameters = ["NumFrames", "ContiguousPointsCriteria", "NumProcessors"]
-        filename_parameters = [
-            "OutputFilenamePrefix",
-            "PDBFileName",
-            "LoadPointsFilename",
-        ]
-
-        for entity in config.entities:
-            if entity[0] == "PDBFILENAME":
-                if path_pdb is not None:
-                    entity[1] = path_pdb
-
-            if entity[0] == "OUTPUTFILENAMEPREFIX":
-                if output_prefix is not None:
-                    if output_prefix[-1] != "/":
-                        output_prefix += "/"
-                    entity[1] = output_prefix
-
-            try:
-                index = [p.upper() for p in float_parameters].index(entity[0])
-                parameters[float_parameters[index]] = float(entity[1])
-            except:
-                pass
-
-            try:
-                index = [p.upper() for p in boolean_parameters].index(entity[0])
-
-                if entity[1].upper() in ["YES", "TRUE"]:
-                    parameters[boolean_parameters[index]] = True
-                else:
-                    parameters[boolean_parameters[index]] = False
-            except:
-                pass
-
-            try:
-                index = [p.upper() for p in int_parameters].index(entity[0])
-                parameters[int_parameters[index]] = int(entity[1])
-            except:
-                pass
-
-            try:
-                index = [p.upper() for p in filename_parameters].index(entity[0])
-                parameters[filename_parameters[index]] = fix_filename(
-                    entity[1].strip(), False
-                ).as_posix()  # so a string
-            except:
-                pass
-
-            # Regions are handled separately for each parameter...
-            if entity[0] == "POINTSINCLUSIONSPHERE":
-                Include = Region()
-                items = entity[1].split(" ")
-                Include.center[0] = float(items[0])
-                Include.center[1] = float(items[1])
-                Include.center[2] = float(items[2])
-                Include.radius = float(items[3])
-                Include.region_type = "SPHERE"
-                parameters["PointsIncludeRegions"].append(Include)
-            elif entity[0] == "POINTSINCLUSIONBOX":
-                Include = Region()
-                items = entity[1].split(" ")
-                Include.center[0] = float(items[0])
-                Include.center[1] = float(items[1])
-                Include.center[2] = float(items[2])
-                Include.box_dimen[0] = float(items[3])
-                Include.box_dimen[1] = float(items[4])
-                Include.box_dimen[2] = float(items[5])
-                Include.region_type = "BOX"
-                parameters["PointsIncludeRegions"].append(Include)
-            if entity[0] == "CONTIGUOUSPOCKETSEEDSPHERE":
-                Contig = Region()
-                items = entity[1].split(" ")
-                Contig.center[0] = float(items[0])
-                Contig.center[1] = float(items[1])
-                Contig.center[2] = float(items[2])
-                Contig.radius = float(items[3])
-                Contig.region_type = "SPHERE"
-                parameters["ContiguousPocketSeedRegions"].append(Contig)
-            elif entity[0] == "CONTIGUOUSPOCKETSEEDBOX":
-                Contig = Region()
-                items = entity[1].split(" ")
-                Contig.center[0] = float(items[0])
-                Contig.center[1] = float(items[1])
-                Contig.center[2] = float(items[2])
-                Contig.box_dimen[0] = float(items[3])
-                Contig.box_dimen[1] = float(items[4])
-                Contig.box_dimen[2] = float(items[5])
-                Contig.region_type = "BOX"
-                parameters["ContiguousPocketSeedRegions"].append(Contig)
-            elif entity[0] == "POINTSEXCLUSIONSPHERE":
-                Exclude = Region()
-                items = entity[1].split(" ")
-                Exclude.center[0] = float(items[0])
-                Exclude.center[1] = float(items[1])
-                Exclude.center[2] = float(items[2])
-                Exclude.radius = float(items[3])
-                Exclude.region_type = "SPHERE"
-                parameters["PointsExcludeRegions"].append(Exclude)
-            elif entity[0] == "POINTSEXCLUSIONBOX":
-                Exclude = Region()
-                items = entity[1].split(" ")
-                Exclude.center[0] = float(items[0])
-                Exclude.center[1] = float(items[1])
-                Exclude.center[2] = float(items[2])
-                Exclude.box_dimen[0] = float(items[3])
-                Exclude.box_dimen[1] = float(items[4])
-                Exclude.box_dimen[2] = float(items[5])
-                Exclude.region_type = "BOX"
-                parameters["PointsExcludeRegions"].append(Exclude)
-
-        # If there are no ContiguousPocketSeedRegions, don't print out the
-        # ContiguousPointsCriteria parameter.
-        if len(parameters["ContiguousPocketSeedRegions"]) == 0:
-            del parameters["ContiguousPointsCriteria"]
+        if output_prefix is None:
+            output_prefix = (
+                "POVME_output."
+                + time.strftime("%m-%d-%y")
+                + "."
+                + time.strftime("%H-%M-%S")
+                + "/"
+            )
 
         # If the output prefix includes a directory, create that directory if
         # necessary
-        if "/" in parameters["OutputFilenamePrefix"]:
-            output_dirname = os.path.dirname(parameters["OutputFilenamePrefix"])
-            # if os.path.exists(output_dirname): shutil.rmtree(output_dirname) # So delete the directory if it already exists.
-            try:
-                os.mkdir(output_dirname)
-            except:
-                pass
-
-        # print out the header
-        self.reference(parameters, "")
-        log("", parameters)
+        if "/" in output_prefix:
+            output_dirname = os.path.dirname(output_prefix)
+            os.makedirs(output_dirname, exist_ok=True)
 
         # create temp swap directory if needed
-        if parameters["UseDiskNotMemory"]:
+        if config.use_disk_not_memory:
             if os.path.exists("./.povme_tmp"):
                 shutil.rmtree("./.povme_tmp")
             os.mkdir("./.povme_tmp")
 
-        # print out parameters
-        log("Parameters:", parameters)
-        for i in list(parameters.keys()):
-
-            if i == "NumFrames" and parameters["NumFrames"] == -1:
-                # So only show this parameter if it's value is not the
-                # default.
-                continue
-
-            if type(parameters[i]) is list:
-                for i2 in parameters[i]:
-                    if i2 != "":
-                        log("\t" + str(i) + ": " + str(i2), parameters)
-            else:
-                if parameters[i] != "":
-                    log("\t" + str(i) + ": " + str(parameters[i]), parameters)
-
+        # User specified regions to include in the PDB structure.
+        # Thus, we compute these points.
         pts = None
-        if len(parameters["PointsIncludeRegions"]) > 0:  # so create the point file
-
-            log("\nGenerating the pocket-encompassing point field", parameters)
-
-            # get all the points of the inclusion regions
-            pts = parameters["PointsIncludeRegions"][0].points_set(
-                parameters["GridSpacing"]
-            )
-            for Included in parameters["PointsIncludeRegions"][1:]:
-                pts = np.vstack((pts, Included.points_set(parameters["GridSpacing"])))
-            pts = unique_rows(pts)
-
-            # get all the points of the exclusion regions
-            if len(parameters["PointsExcludeRegions"]) > 0:
-                pts_exclusion = parameters["PointsExcludeRegions"][0].points_set(
-                    parameters["GridSpacing"]
+        if config.load_points_path is not None:
+            if not os.path.exists(config.load_points_path):
+                logger.error(
+                    f"points file at {config.load_points_path} does not exist!"
                 )
-                for Excluded in parameters["PointsExcludeRegions"][1:]:
-                    pts_exclusion = np.vstack(
-                        (pts_exclusion, Excluded.points_set(parameters["GridSpacing"]))
-                    )
-                pts_exclusion = unique_rows(pts_exclusion)
+            pts = np.load(config.load_points_path)
+        elif (len(config.points_inclusion_box) > 0) or (
+            len(config.points_inclusion_sphere) > 0
+        ):
+            pts = self.gen_points(config)
+            if config.save_points:
+                self.write_points(pts, output_prefix, config)
+        if pts is None:
+            logger.error("No points are specified!")
+            logger.error("Please specify inclusions or load points from a NumPy file.")
+            sys.exit(0)
 
-                # remove the exclusion points from the inclusion points I
-                # think there ought to be a set-based way of doing this, but
-                # I'm going to go for the pairwise comparison. consider
-                # rewriting later
-                index_to_remove = np.nonzero(cdist(pts, pts_exclusion) < 1e-7)[0]
-                pts = np.delete(pts, index_to_remove, axis=0)
-
-            # save the points as PDB
-            if parameters["SavePoints"]:
-
-                # First, save the point field itself
-
-                log("\nSaving the point field as a PDB and NPY file", parameters)
-
-                points_filename = parameters["OutputFilenamePrefix"] + "point_field.pdb"
-
-                if parameters["CompressOutput"]:
-                    afile = gzopenfile(points_filename + ".gz", "wb")
-                else:
-                    afile = openfile(points_filename, "w")
-
-                write_to_file(
-                    afile, numpy_to_pdb(pts, "X"), encode=parameters["CompressOutput"]
-                )
-                afile.close()
-
-                # save the points as npy
-
-                np.save(points_filename + ".npy", pts)
-
-                log(
-                    "\tPoint field saved to "
-                    + points_filename
-                    + " to permit visualization",
-                    parameters,
-                )
-                log(
-                    "\tPoint field saved to "
-                    + points_filename
-                    + ".npy to optionally load for the volume calculation",
-                    parameters,
-                )
-                log("", parameters)
-
-                # Now, save the contiguous seed points as well, if specified.
-                if len(parameters["ContiguousPocketSeedRegions"]) > 0:
-                    # get all the contiguous points
-                    contig_pts = parameters["ContiguousPocketSeedRegions"][
-                        0
-                    ].points_set(parameters["GridSpacing"])
-                    for Contig in parameters["ContiguousPocketSeedRegions"][1:]:
-                        contig_pts = np.vstack(
-                            (contig_pts, Contig.points_set(parameters["GridSpacing"]))
-                        )
-                    contig_pts = unique_rows(contig_pts)
-
-                    log(
-                        "\nSaving the contiguous-pocket seed points as a PDB file",
-                        parameters,
-                    )
-
-                    points_filename = (
-                        parameters["OutputFilenamePrefix"]
-                        + "contiguous_pocket_seed_points.pdb"
-                    )
-
-                    if parameters["CompressOutput"]:
-                        afile = gzopenfile(points_filename + ".gz", "wb")
-                    else:
-                        afile = openfile(points_filename, "w")
-
-                    write_to_file(
-                        afile,
-                        numpy_to_pdb(contig_pts, "X"),
-                        encode=parameters["CompressOutput"],
-                    )
-                    afile.close()
-
-                    log(
-                        "\tContiguous-pocket seed points saved to "
-                        + points_filename
-                        + " to permit visualization",
-                        parameters,
-                    )
-                    log("", parameters)
+        # Handle contig TODO:
+        regions_contig = self._get_regions_contig(config)
+        if len(regions_contig) > 0:
+            self.write_points_contig(regions_contig, output_prefix, config)
 
         # so there's a PDB point specified for calculating the volume.
-        if parameters["PDBFileName"] != "":
-
-            # load the points in they aren't already present
-            if pts is None:
-                log("\nLoading the point-field NPY file...", parameters)
-                parameters["pts_orig"] = np.load(parameters["LoadPointsFilename"])
-            else:
-                parameters["pts_orig"] = pts
-
-            # load the PDB frames
-            index_and_pdbs = self.load_multi_frame_pdb(
-                parameters["PDBFileName"], parameters
-            )
-
-            # calculate all the volumes
-            log("", parameters)
-            log("Calculating the pocket volume of each frame", parameters)
-            tmp = MultiThreading(
-                [
-                    (index, pdb_object, parameters)
-                    for index, pdb_object in index_and_pdbs
-                ],
-                parameters["NumProcessors"],
-                MultithreadingCalcVolumeTask,
-            )
-
-            # delete the temp swap directory if necessary
-            if parameters["UseDiskNotMemory"]:
-                if os.path.exists("./.povme_tmp"):
-                    shutil.rmtree("./.povme_tmp")
-
-            # display the results
-            results_dic = {}
-            for result in tmp.results:
-                results_dic[result[0]] = result[1]
-            log("", parameters)
-            log("FRAME        | VOLUME (A^3)", parameters)
-            log("-------------+-------------", parameters)
-            for i in sorted(results_dic.keys()):
-                log(str(i).ljust(13) + "| " + str(results_dic[i]), parameters)
-
-            log("", parameters)
-            log(
-                "Execution time = " + str(time.time() - start_time) + " sec", parameters
-            )
-            log("", parameters)
+        if path_pdb is not None:
+            if not os.path.exists(path_pdb):
+                logger.error(f"PDB file {path_pdb} does not exits!")
+                sys.exit(0)
+            results = self.compute_volume(path_pdb, config)
 
             # if the user requested a separate volume file, save that as well
-            if parameters["SaveTabbedVolumeFile"]:
-                if parameters["CompressOutput"]:
+            if config.save_tabbed_volume_file:
+                if config.compress_output:
                     f = gzopenfile(
-                        parameters["OutputFilenamePrefix"] + "volumes.tabbed.txt.gz",
+                        output_prefix + "volumes.tabbed.txt.gz",
                         "wb",
                     )
 
                 else:
-                    f = openfile(
-                        parameters["OutputFilenamePrefix"] + "volumes.tabbed.txt", "w"
-                    )
-                for i in sorted(results_dic.keys()):
+                    f = openfile(output_prefix + "volumes.tabbed.txt", "w")
+                for i in sorted(results.keys()):
                     write_to_file(
                         f,
-                        str(i) + "\t" + str(results_dic[i]) + "\n",
-                        encode=parameters["CompressOutput"],
+                        str(i) + "\t" + str(results[i]) + "\n",
+                        encode=config.compress_output,
                     )
 
                 f.close()
 
             # if the user wanted a single trajectory containing all the
             # volumes, generate that here.
-            if parameters["SavePocketVolumesTrajectory"]:
-                if parameters["CompressOutput"]:
+            if config.save_pocket_volumes_trajectory:
+                if config.compress_output:
                     traj_file = gzopenfile(
-                        parameters["OutputFilenamePrefix"] + "volume_trajectory.pdb.gz",
+                        output_prefix + "volume_trajectory.pdb.gz",
                         "wb",
                     )
                 else:
                     traj_file = openfile(
-                        parameters["OutputFilenamePrefix"] + "volume_trajectory.pdb",
+                        output_prefix + "volume_trajectory.pdb",
                         "w",
                     )
 
-                for frame_index in range(1, len(list(results_dic.keys())) + 1):
-                    if parameters["CompressOutput"]:
+                for frame_index in range(1, len(list(results.keys())) + 1):
+                    if config.compress_output:
                         frame_file = gzopenfile(
-                            parameters["OutputFilenamePrefix"]
-                            + "frame_"
-                            + str(frame_index)
-                            + ".pdb.gz",
+                            output_prefix + "frame_" + str(frame_index) + ".pdb.gz",
                             "rb",
                         )
                     else:
                         frame_file = openfile(
-                            parameters["OutputFilenamePrefix"]
-                            + "frame_"
-                            + str(frame_index)
-                            + ".pdb",
+                            output_prefix + "frame_" + str(frame_index) + ".pdb",
                             "r",
                         )
 
@@ -584,7 +432,7 @@ class RunPOVME:
 
             # if the user requested a volumetric density map, then generate it
             # here
-            if parameters["SaveVolumetricDensityMap"]:
+            if config.save_volumetric_density_map:
                 unique_points = {}
 
                 overall_min = np.ones(3) * 1e100
@@ -607,25 +455,24 @@ class RunPOVME:
                             except:
                                 unique_points[pt_key] = 1
                 if overall_min[0] == 1e100:
-                    log(
+                    logger.info(
                         "ERROR! Cannont save volumetric density file because no volumes present in any frame.",
-                        parameters,
                     )
                 else:
                     xpts = np.arange(
                         overall_min[0],
-                        overall_max[0] + parameters["GridSpacing"],
-                        parameters["GridSpacing"],
+                        overall_max[0] + config.grid_spacing,
+                        config.grid_spacing,
                     )
                     ypts = np.arange(
                         overall_min[1],
-                        overall_max[1] + parameters["GridSpacing"],
-                        parameters["GridSpacing"],
+                        overall_max[1] + config.grid_spacing,
+                        config.grid_spacing,
                     )
                     zpts = np.arange(
                         overall_min[2],
-                        overall_max[2] + parameters["GridSpacing"],
-                        parameters["GridSpacing"],
+                        overall_max[2] + config.grid_spacing,
+                        config.grid_spacing,
                     )
 
                     all_pts = np.zeros((len(xpts) * len(ypts) * len(zpts), 4))
@@ -655,4 +502,5 @@ class RunPOVME:
                     # import cPickle as pickle
                     # pickle.dump(all_pts, open('dill.pickle', 'w'))
 
-        self.results = results_dic
+        self.results = results
+        return results

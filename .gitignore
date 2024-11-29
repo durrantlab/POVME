@@ -8,3 +8,6 @@
 # Documentation
 api
 public
+
+__pycache__
+.vscode

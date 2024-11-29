@@ -348,15 +348,11 @@ def dx_freq(freq_mat: npt.NDArray[np.float64], parameters: dict[str, Any]) -> No
     ) == N, "Something is wrong with the freq_mat array: it is not a prismatic shape"
 
     # 3. write the header and footer
-    if parameters["SaveVolumetricDensityMap"]:
-        if parameters["CompressOutput"]:
-            dx_file = gzopenfile(
-                parameters["OutputFilenamePrefix"] + "volumetric_density.dx.gz", "wb"
-            )
+    if config.save_volumetric_density_map:
+        if config.compress_output:
+            dx_file = gzopenfile(output_prefix + "volumetric_density.dx.gz", "wb")
         else:
-            dx_file = openfile(
-                parameters["OutputFilenamePrefix"] + "volumetric_density.dx", "w"
-            )
+            dx_file = openfile(output_prefix + "volumetric_density.dx", "w")
 
         header_template = """# Data from POVME 2.2.2
 #
@@ -394,17 +390,17 @@ component "connections" value 2
 component "data" value 3"""
 
         footer = footer_template  # the footer needs no formatting
-        write_to_file(dx_file, header, encode=parameters["CompressOutput"])
+        write_to_file(dx_file, header, encode=config.compress_output)
         newline_counter = 1
         for i in range(N):  # write the data to the DX file
             write_to_file(
-                dx_file, "%8.6e" % freq_mat[i, 3], encode=parameters["CompressOutput"]
+                dx_file, "%8.6e" % freq_mat[i, 3], encode=config.compress_output
             )
             if newline_counter == 3:
                 newline_counter = 0
-                write_to_file(dx_file, "\n", encode=parameters["CompressOutput"])
+                write_to_file(dx_file, "\n", encode=config.compress_output)
             else:
-                write_to_file(dx_file, " ", encode=parameters["CompressOutput"])
+                write_to_file(dx_file, " ", encode=config.compress_output)
             newline_counter += 1
-        write_to_file(dx_file, footer, encode=parameters["CompressOutput"])
+        write_to_file(dx_file, footer, encode=config.compress_output)
         dx_file.close

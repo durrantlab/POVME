@@ -6,8 +6,8 @@ TEST_DIR = os.path.dirname(__file__)
 
 
 @pytest.fixture
-def path_4nss_input():
-    return os.path.join(TEST_DIR, "files/4nss/povme-input.ini")
+def path_4nss_config():
+    return os.path.join(TEST_DIR, "files/4nss/povme.yml")
 
 
 @pytest.fixture
