@@ -294,6 +294,126 @@ class POVME:
                 shutil.rmtree("./.povme_tmp")
         logger.info("Execution time = " + str(time.time() - self.t_start) + " sec")
         return tmp.results
+    
+    @staticmethod
+    def write_vol_csv(results_vol, output_prefix, config):
+        if config.compress_output:
+            f = gzopenfile(
+                output_prefix + "volumes.csv.gz",
+                "wb",
+            )
+        else:
+            f = openfile(output_prefix + "volumes.csv", "w")
+
+        write_to_file(
+            f,
+            "frame_idx,volume\n",
+            encode=config.compress_output,
+        )
+        for i in sorted(results_vol.keys()):
+            write_to_file(
+                f,
+                str(i) + "," + str(results_vol[i]) + "\n",
+                encode=config.compress_output,
+            )
+        f.close()
+    
+    @staticmethod
+    def write_vol_traj(results_vol, output_prefix, config):
+        if config.compress_output:
+            traj_file = gzopenfile(
+                output_prefix + "volume_trajectory.pdb.gz",
+                "wb",
+            )
+        else:
+            traj_file = openfile(
+                output_prefix + "volume_trajectory.pdb",
+                "w",
+            )
+
+        for frame_index in range(1, len(list(results_vol.keys())) + 1):
+            if config.compress_output:
+                frame_file = gzopenfile(
+                    output_prefix + "frame_" + str(frame_index) + ".pdb.gz",
+                    "rb",
+                )
+            else:
+                frame_file = openfile(
+                    output_prefix + "frame_" + str(frame_index) + ".pdb",
+                    "r",
+                )
+
+            traj_file.write(frame_file.read())
+            frame_file.close()
+
+        traj_file.close()
+
+
+    @staticmethod
+    def write_vol_dens(results, output_prefix, config):
+        unique_points: dict[str, Any] = {}
+
+        overall_min = np.ones(3) * 1e100
+        overall_max = np.ones(3) * -1e100
+
+        for result in results:
+            pts = result[2]["SaveVolumetricDensityMap"]
+
+            if len(pts) > 0:
+                amin = np.min(pts, axis=0)
+                amax = np.max(pts, axis=0)
+
+                overall_min = np.min(np.vstack((overall_min, amin)), axis=0)
+                overall_max = np.max(np.vstack((overall_max, amax)), axis=0)
+
+                for pt in pts:
+                    pt_key = str(pt[0]) + ";" + str(pt[1]) + ";" + str(pt[2])
+                    try:
+                        unique_points[pt_key] = unique_points[pt_key] + 1
+                    except:
+                        unique_points[pt_key] = 1
+        if overall_min[0] == 1e100:
+            logger.info(
+                "ERROR! Cannot save volumetric density file because no volumes present in any frame.",
+            )
+        else:
+            xpts = np.arange(
+                overall_min[0],
+                overall_max[0] + config.grid_spacing,
+                config.grid_spacing,
+            )
+            ypts = np.arange(
+                overall_min[1],
+                overall_max[1] + config.grid_spacing,
+                config.grid_spacing,
+            )
+            zpts = np.arange(
+                overall_min[2],
+                overall_max[2] + config.grid_spacing,
+                config.grid_spacing,
+            )
+
+            all_pts = np.zeros((len(xpts) * len(ypts) * len(zpts), 4))
+
+            i = 0
+            for x in xpts:
+                for y in ypts:
+                    for z in zpts:
+                        key = str(x) + ";" + str(y) + ";" + str(z)
+                        all_pts[i][0] = x
+                        all_pts[i][1] = y
+                        all_pts[i][2] = z
+
+                        try:
+                            all_pts[i][3] = unique_points[key]
+                        except:
+                            pass
+
+                        i = i + 1
+
+            # convert the counts in the fourth column into frequencies
+            all_pts[:, 3] = all_pts[:, 3] / len(results)
+            dx_freq(all_pts, output_prefix, config)  # save the dx file
 
     def run(
         self,
@@ -368,128 +488,16 @@ class POVME:
             results_vol[result[0]] = result[1]
 
         # Save volumes to CSV file
-        if config.compress_output:
-            f = gzopenfile(
-                output_prefix + "volumes.csv.gz",
-                "wb",
-            )
-        else:
-            f = openfile(output_prefix + "volumes.csv", "w")
-
-        write_to_file(
-            f,
-            "frame_idx,volume\n",
-            encode=config.compress_output,
-        )
-        for i in sorted(results_vol.keys()):
-            write_to_file(
-                f,
-                str(i) + "," + str(results_vol[i]) + "\n",
-                encode=config.compress_output,
-            )
-        f.close()
+        self.write_vol_csv(results_vol, output_prefix, config)
 
         # if the user wanted a single trajectory containing all the
         # volumes, generate that here.
         if config.save_pocket_volumes_trajectory:
-            if config.compress_output:
-                traj_file = gzopenfile(
-                    output_prefix + "volume_trajectory.pdb.gz",
-                    "wb",
-                )
-            else:
-                traj_file = openfile(
-                    output_prefix + "volume_trajectory.pdb",
-                    "w",
-                )
+            self.write_vol_traj(results_vol, output_prefix, config)
 
-            for frame_index in range(1, len(list(results_vol.keys())) + 1):
-                if config.compress_output:
-                    frame_file = gzopenfile(
-                        output_prefix + "frame_" + str(frame_index) + ".pdb.gz",
-                        "rb",
-                    )
-                else:
-                    frame_file = openfile(
-                        output_prefix + "frame_" + str(frame_index) + ".pdb",
-                        "r",
-                    )
-
-                traj_file.write(frame_file.read())
-                frame_file.close()
-
-            traj_file.close()
-
-        # if the user requested a volumetric density map, then generate it
-        # here
+        # if the user requested a volumetric density map, then generate it here
         if config.save_volumetric_density_map:
-            unique_points: dict[str, Any] = {}
+            self.write_vol_dens(results, output_prefix, config)
 
-            overall_min = np.ones(3) * 1e100
-            overall_max = np.ones(3) * -1e100
-
-            for result in results:
-                pts = result[2]["SaveVolumetricDensityMap"]
-
-                if len(pts) > 0:
-                    amin = np.min(pts, axis=0)
-                    amax = np.max(pts, axis=0)
-
-                    overall_min = np.min(np.vstack((overall_min, amin)), axis=0)
-                    overall_max = np.max(np.vstack((overall_max, amax)), axis=0)
-
-                    for pt in pts:
-                        pt_key = str(pt[0]) + ";" + str(pt[1]) + ";" + str(pt[2])
-                        try:
-                            unique_points[pt_key] = unique_points[pt_key] + 1
-                        except:
-                            unique_points[pt_key] = 1
-            if overall_min[0] == 1e100:
-                logger.info(
-                    "ERROR! Cannot save volumetric density file because no volumes present in any frame.",
-                )
-            else:
-                xpts = np.arange(
-                    overall_min[0],
-                    overall_max[0] + config.grid_spacing,
-                    config.grid_spacing,
-                )
-                ypts = np.arange(
-                    overall_min[1],
-                    overall_max[1] + config.grid_spacing,
-                    config.grid_spacing,
-                )
-                zpts = np.arange(
-                    overall_min[2],
-                    overall_max[2] + config.grid_spacing,
-                    config.grid_spacing,
-                )
-
-                all_pts = np.zeros((len(xpts) * len(ypts) * len(zpts), 4))
-
-                i = 0
-                for x in xpts:
-                    for y in ypts:
-                        for z in zpts:
-                            key = str(x) + ";" + str(y) + ";" + str(z)
-                            all_pts[i][0] = x
-                            all_pts[i][1] = y
-                            all_pts[i][2] = z
-
-                            try:
-                                all_pts[i][3] = unique_points[key]
-                            except:
-                                pass
-
-                            i = i + 1
-
-                # convert the counts in the fourth column into frequencies
-                all_pts[:, 3] = all_pts[:, 3] / len(results)
-                dx_freq(all_pts, output_prefix, config)  # save the dx file
-
-                # print "To turn into a DX file:"
-                # print all_pts
-                # import cPickle as pickle
-                # pickle.dump(all_pts, open('dill.pickle', 'w'))
 
         return results_vol
