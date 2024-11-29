@@ -86,9 +86,6 @@ class POVMEConfig(BaseModel, YamlIO):
     output_equal_num_points_per_frame: bool = False
     """Whether to add extra points at the origin (0.0, 0.0, 0.0) to ensure the same number of points in each frame."""
 
-    save_tabbed_volume_file: bool = False
-    """Whether to save the calculated volumes to a tab-separated file."""
-
     save_volumetric_density_map: bool = False
     """Whether to save a volumetric density map in DX format."""
 

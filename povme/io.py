@@ -1,11 +1,11 @@
-from typing import Any
-
 import gzip
 import platform
 from pathlib import Path, PureWindowsPath
 
 import numpy as np
 import numpy.typing as npt
+
+from .config import POVMEConfig
 
 
 def fix_filename(path: str, must_exist: bool = True) -> Path:
@@ -295,7 +295,9 @@ def numpy_to_pdb(narray, letter, resname=""):
         return t
 
 
-def dx_freq(freq_mat: npt.NDArray[np.float64], parameters: dict[str, Any]) -> None:
+def dx_freq(
+    freq_mat: npt.NDArray[np.float64], output_prefix: str, config: POVMEConfig
+) -> None:
     """Generates a DX file that records the frequency that a volume element is
     open.
 

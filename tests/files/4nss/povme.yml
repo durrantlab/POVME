@@ -1,5 +1,3 @@
-# POVME 2.2.2 Sample Input File
-
 grid_spacing: 1.0
 
 load_points_path: null
@@ -41,8 +39,6 @@ save_pocket_volumes_trajectory: true
 
 output_equal_num_points_per_frame: true
 
-save_tabbed_volume_file: true
-
 save_volumetric_density_map: true
 
-compress_output: true
+compress_output: false

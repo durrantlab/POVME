@@ -384,15 +384,11 @@ class MultithreadingCalcVolumeTask(MultithreadingTaskGeneral):
 
         """
 
-        frame_indx = item[0]
-        pdb = item[1]
-        parameters = item[2]
-        # pts = parameters['pts_orig'].copy() # this works
-        pts = parameters["pts_orig"]  # also works, so keep because faster
+        frame_indx, pdb, pts, regions_contig, output_prefix, config = item
 
         # if the user wants to save empty points (points that are removed),
         # then we need a copy of the original
-        if parameters["OutputEqualNumPointsPerFrame"]:
+        if config.output_equal_num_points_per_frame:
             pts_deleted = pts.copy()
 
         # you may need to load it from disk if the user so specified
@@ -402,8 +398,8 @@ class MultithreadingCalcVolumeTask(MultithreadingTaskGeneral):
             pdb.fileio.load_pym_into(pym_filename)
 
         # remove the points that are far from the points region anyway
-        min_pts = np.min(pts, 0) - parameters["DistanceCutoff"] - 1
-        max_pts = np.max(pts, 0) + parameters["DistanceCutoff"] + 1
+        min_pts = np.min(pts, 0) - config.distance_cutoff - 1
+        max_pts = np.max(pts, 0) + config.distance_cutoff + 1
 
         # identify atoms that are so far away from points that they can be
         # ignored. First, x's too small.
@@ -474,13 +470,13 @@ class MultithreadingCalcVolumeTask(MultithreadingTaskGeneral):
 
         # now identify the points that are close to the protein atoms
         dists = cdist(pdb.information.coordinates, pts)
-        close_pt_index = np.nonzero((dists < (vdw + parameters["DistanceCutoff"])))[1]
+        close_pt_index = np.nonzero((dists < (vdw + config.distance_cutoff)))[1]
 
         # now keep the appropriate points
         pts = np.delete(pts, close_pt_index, axis=0)
 
         # exclude points outside convex hull
-        if parameters["ConvexHullExclusion"]:
+        if config.convex_hull_exclusion:
             convex_hull_3d = ConvexHull(pts)
 
             # get the coordinates of the non-hydrogen atoms (faster to discard
@@ -519,27 +515,25 @@ class MultithreadingCalcVolumeTask(MultithreadingTaskGeneral):
             pts = np.array(pts)
 
         # Now, enforce contiguity if needed
-        if len(parameters["ContiguousPocketSeedRegions"]) > 0 and len(pts) > 0:
+        if len(regions_contig) > 0 and len(pts) > 0:
             # first, for each point, determine how many neighbors it has to
             # count kiddy-corner points too
-            cutoff_dist = parameters["GridSpacing"] * 1.01 * math.sqrt(3)
+            cutoff_dist = config.grid_spacing * 1.01 * math.sqrt(3)
             pts_dists = squareform(pdist(pts))
             # minus 1 because an atom shouldn't be considered its own neighor
             neighbor_counts = np.sum(pts_dists < cutoff_dist, axis=0) - 1
 
             # remove all the points that don't have enough neighbors
             pts = pts[
-                np.nonzero(neighbor_counts >= parameters["ContiguousPointsCriteria"])[0]
+                np.nonzero(neighbor_counts >= config.contiguous_points_criteria)[0]
             ]
 
             # get all the points in the defined parameters['ContiguousPocket']
             # seed regions
-            contig_pts = parameters["ContiguousPocketSeedRegions"][0].points_set(
-                parameters["GridSpacing"]
-            )
-            for Contig in parameters["ContiguousPocketSeedRegions"][1:]:
+            contig_pts = regions_contig[0].points_set(config.grid_spacing)
+            for Contig in regions_contig[1:]:
                 contig_pts = np.vstack(
-                    (contig_pts, Contig.points_set(parameters["GridSpacing"]))
+                    (contig_pts, Contig.points_set(config.grid_spacing))
                 )
             contig_pts = unique_rows(contig_pts)
 
@@ -563,24 +557,23 @@ class MultithreadingCalcVolumeTask(MultithreadingTaskGeneral):
 
                 pts = contig_pts
             except:
-                log(
-                    "\tFrame "
+                logger.exception(
+                    "Frame "
                     + str(frame_indx)
-                    + ": None of the points in the contiguous-pocket seed region\n\t\tare outside the volume of the protein! Assuming a pocket\n\t\tvolume of 0.0 A.",
-                    parameters,
+                    + ": None of the points in the contiguous-pocket seed region\n\t\tare outside the volume of the protein! Assuming a pocket\n\t\tvolume of 0.0 A."
                 )
                 pts = np.array([])
 
         # now write the pdb and calculate the volume
-        volume = len(pts) * math.pow(parameters["GridSpacing"], 3)
+        volume = len(pts) * math.pow(config.grid_spacing, 3)
 
-        log("\tFrame " + str(frame_indx) + ": " + repr(volume) + " A^3", parameters)
-        if parameters["SaveIndividualPocketVolumes"]:
+        logger.info("\tFrame " + str(frame_indx) + ": " + repr(volume) + " A^3")
+        if config.save_individual_pocket_volumes:
             frame_text = f"REMARK Frame {str(frame_indx)}" + "\n"
             frame_text += f"REMARK Volume = {repr(volume)}" + " Cubic Angstroms\n"
             frame_text += numpy_to_pdb(pts, "X")
 
-            if parameters["OutputEqualNumPointsPerFrame"]:
+            if config.output_equal_num_points_per_frame:
                 # you need to find the points that are in pts_deleted but not
                 # in pts
                 tmp = reduce(
