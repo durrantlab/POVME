@@ -17,5 +17,6 @@ def test_4nss(path_4nss_config, path_4nss_output):
     actual_vols = set(results.values())
     assert actual_vols == expected_vols
     num_output_files = len(glob.glob(dir_output + "/*"))
-    if num_output_files != 12:
-        raise Exception("Expected 12 output files, but got " + str(num_output_files))
+    # Was 12, but we currently do not write a log file.
+    if num_output_files != 11:
+        raise Exception("Expected 11 output files, but got " + str(num_output_files))
