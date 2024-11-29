@@ -869,6 +869,47 @@ class Information:
 
         return hybrid
 
+    def get_atom_information(self):
+        return self.atom_information
+
+    def get_coordinates(self):
+        return self.coordinates
+
+    def get_constants(self):
+        return self.constants
+
+    def set_atom_information(self, atom_information):
+        self.atom_information = atom_information
+
+    def set_coordinates(self, coordinates):
+        self.coordinates = coordinates
+
+    def get_bounding_box(self, selection=None, padding=0.0):
+        """Calculates a box that bounds (encompasses) a set of atoms.
+
+        Arguments:
+        selection -- An optional np.array containing the indices of the
+            atoms to consider. If ommitted, all atoms of the Molecule
+            object will be considered.
+        padding -- An optional float. The bounding box will extend this
+            many angstroms beyond the atoms being considered.
+
+        Returns:
+        A numpy array representing two 3D points, (min_x, min_y, min_z)
+            and (max_x, max_y, max_z), that bound the molecule.
+
+        """
+
+        if selection is None:
+            selection = self.parent_molecule.selections.select_all()
+
+        return np.vstack(
+            (
+                np.min(self.coordinates[selection], 0),
+                np.max(self.coordinates[selection], 0),
+            )
+        )
+
 
 class FileIO:
     """A class for saving and loading molecular data into a pymolecule.Molecule
@@ -932,7 +973,7 @@ class FileIO:
     def load_pdb_into(
         self,
         filename,
-        bonds_by_distance=True,
+        bonds_by_distance=False,
         serial_reindex=True,
         resseq_reindex=False,
     ):
@@ -1150,11 +1191,11 @@ class FileIO:
         # else: # create empty bond array
         #    self.parent_molecule.information.bonds = np.zeros((len(self.parent_molecule.information.atom_information), len(self.parent_molecule.information.atom_information)))
 
-        if bonds_by_distance == True:
+        if bonds_by_distance:
             self.parent_molecule.atoms_and_bonds.create_bonds_by_distance(False)
-        if serial_reindex == True:
+        if serial_reindex:
             self.serial_reindex()
-        if resseq_reindex == True:
+        if resseq_reindex:
             self.resseq_reindex()
 
     def save_pym(
@@ -1213,7 +1254,7 @@ class FileIO:
         # save components
 
         # python objects must be pickled
-        if save_hierarchy == True:
+        if save_hierarchy:
             # note this is a combo of python objects and numpy arrays, so must
             # be pickled.
             pickle.dump(
@@ -1221,13 +1262,13 @@ class FileIO:
                 openfile(filename + "hierarchy", "wb"),
                 -1,
             )
-        if save_remarks == True:
+        if save_remarks:
             pickle.dump(
                 self.parent_molecule.information.remarks,
                 openfile(filename + "remarks", "wb"),
                 -1,
             )  # using the latest protocol
-        if save_filename == True:
+        if save_filename:
             pickle.dump(
                 self.parent_molecule.information.filename,
                 openfile(filename + "filename", "wb"),
@@ -1255,9 +1296,9 @@ class FileIO:
         np.savez(
             filename + "coordinates.npz", self.parent_molecule.information.coordinates
         )
-        if save_bonds == True:
+        if save_bonds:
             np.savez(filename + "bonds.npz", self.parent_molecule.information.bonds)
-        if save_coordinates_undo_point == True:
+        if save_coordinates_undo_point:
             np.savez(
                 filename + "coordinates_undo_point.npz",
                 self.parent_molecule.information.coordinates_undo_point,
@@ -1288,9 +1329,9 @@ class FileIO:
         # so the pdb is not empty (if it is empty, don't save)
         if len(self.parent_molecule.information.atom_information) > 0:
 
-            if serial_reindex == True:
+            if serial_reindex:
                 self.serial_reindex()
-            if resseq_reindex == True:
+            if resseq_reindex:
                 self.resseq_reindex()
 
             if not return_text:
@@ -1560,10 +1601,7 @@ class AtomsAndBonds:
         """
 
         # create/recreate the bond array if needed
-        if (
-            remove_old_bond_data == True
-            or self.parent_molecule.information.bonds is None
-        ):
+        if remove_old_bond_data or self.parent_molecule.information.bonds is None:
             self.parent_molecule.information.bonds = np.zeros(
                 (
                     len(self.parent_molecule.information.atom_information),
@@ -1632,7 +1670,7 @@ class AtomsAndBonds:
                     self.parent_molecule.information.bonds[index1][index2] = 1
                     self.parent_molecule.information.bonds[index2][index1] = 1
 
-        if delete_excessive_bonds == True:
+        if delete_excessive_bonds:
             # now do a sanity check. C cannot have more than 4 bonds, O cannot
             # have more than 2, and N cannot have more than 2 if more, than
             # use ones closest to ideal bond length
@@ -2450,7 +2488,7 @@ class Selections:
 
         """
 
-        if pairwise_comparison == True:
+        if pairwise_comparison:
 
             dists = cdist(
                 self.parent_molecule.information.coordinates,
@@ -2645,7 +2683,7 @@ class Selections:
                     )
 
                     if (
-                        terminate_early == True
+                        terminate_early
                     ):  # so don't keep looking once you've found something
                         return (self_close_atom_indices, other_close_atom_indices)
 
@@ -2702,9 +2740,9 @@ class Selections:
 
         # note that hierarchy will have to be recalculated
 
-        if serial_reindex == True:
+        if serial_reindex:
             new_mol.fileio.serial_reindex()
-        if resseq_reindex == True:
+        if resseq_reindex:
             new_mol.fileio.resseq_reindex()
         return new_mol
 
@@ -2831,6 +2869,31 @@ class Selections:
                 )
 
         return self.parent_molecule.information.hierarchy["residues"]["indices"]
+
+    def get_molecule_from_selection(self, selection):
+        """Creates a Molecule from a user-defined atom selection.
+
+        Args:
+            selection: A np.array containing the indices of the atoms in
+                the user-defined selection.
+
+        Returns:
+            A Molecule object containing the atoms of the user-defined
+                selection.
+
+        """
+
+        new_mol = Molecule()
+        new_mol.information.set_coordinates(
+            self.parent_molecule.information.get_coordinates()[selection]
+        )
+        new_mol.information.set_atom_information(
+            self.parent_molecule.information.get_atom_information()[selection]
+        )
+
+        # note that hierarchy will have to be recalculated
+
+        return new_mol
 
 
 class Manipulation:
@@ -3491,7 +3554,7 @@ class OtherMolecules:
         """
 
         if (
-            pairwise_comparison == True
+            pairwise_comparison
         ):  # so use a simple pairwise comparison to find close atoms
             (
                 indices1,
@@ -3604,7 +3667,7 @@ class OtherMolecules:
 
         """
 
-        if pairwise_comparison == True:
+        if pairwise_comparison:
             return np.amin(
                 cdist(
                     self.parent_molecule.information.coordinates,

@@ -156,3 +156,24 @@ class MultithreadingTaskGeneral:
         # self.results.append(some_result)
 
         pass
+
+
+class GeneralTask:
+    """A class that determines the specific calculations that will be
+    performed when multi-processor support is used. Other, more
+    specific classes will inherit this one."""
+
+    results = []
+
+    def runit(self, running, mutex, results_queue, items):
+        for item in items:
+            self.value_func(item, results_queue)
+        mutex.acquire()
+        running.value -= 1
+        mutex.release()
+        results_queue.put(self.results)
+
+    # this is the function that changes through inheritance
+    def value_func(self, item, results_queue):
+        print(item)  # here's where you do something
+        self.results.append(item)  # here save the results for later compilation

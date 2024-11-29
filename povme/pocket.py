@@ -1,13 +1,9 @@
-from typing import Any
-
-import np.typing as npt
 import numpy as np
+import numpy.typing as npt
 from scipy import spatial
 
 from .io import write_pdbs
 from .parallel import GeneralTask, MultiThreading
-
-params: dict[str, Any] = {}
 
 
 class BoxOfPoints:
@@ -52,14 +48,14 @@ class BoxOfPoints:
 
         return np.floor(val / reso) * reso
 
-    def remove_points_outside_convex_hull(self, hull):
+    def remove_points_outside_convex_hull(self, hull, config):
         """Removes box points that are outside a convex hull.
 
         Args:
             hull: The convex hull.
         """
-        chunks = [(hull, t) for t in np.array_split(self.points, params["processors"])]
-        tmp = MultiThreading(chunks, params["processors"], self.__MultiIdHullPts)
+        chunks = [(hull, t) for t in np.array_split(self.points, config.n_cores)]
+        tmp = MultiThreading(chunks, config.n_cores, self.__MultiIdHullPts)
         self.points = np.vstack(tmp.results)
 
     class __MultiIdHullPts(GeneralTask):
@@ -87,7 +83,7 @@ class BoxOfPoints:
                 self.results.append(np.array(new_pts))
 
     def remove_all_points_close_to_other_points(
-        self, other_points: npt.NDArray[np.float64], dist_cutoff: float
+        self, other_points: npt.NDArray[np.float64], dist_cutoff: float, config
     ) -> None:
         """Removes all points in this box that come within the points specified
         in a numpy array
@@ -103,9 +99,9 @@ class BoxOfPoints:
         box_of_pts_distance_tree = spatial.KDTree(self.points)
         chunks = [
             (box_of_pts_distance_tree, dist_cutoff, t)
-            for t in np.array_split(other_points, params["processors"])
+            for t in np.array_split(other_points, config.n_cores)
         ]
-        tmp = MultiThreading(chunks, params["processors"], self.__MultiGetClosePoints)
+        tmp = MultiThreading(chunks, config.n_cores, self.__MultiGetClosePoints)
         indices_of_box_pts_close_to_molecule_points = np.unique(np.hstack(tmp.results))
 
         self.points = np.delete(

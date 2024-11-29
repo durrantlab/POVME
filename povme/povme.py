@@ -294,7 +294,7 @@ class POVME:
                 shutil.rmtree("./.povme_tmp")
         logger.info("Execution time = " + str(time.time() - self.t_start) + " sec")
         return tmp.results
-    
+
     @staticmethod
     def write_vol_csv(results_vol, output_prefix, config):
         if config.compress_output:
@@ -317,7 +317,7 @@ class POVME:
                 encode=config.compress_output,
             )
         f.close()
-    
+
     @staticmethod
     def write_vol_traj(results_vol, output_prefix, config):
         if config.compress_output:
@@ -347,7 +347,6 @@ class POVME:
             frame_file.close()
 
         traj_file.close()
-
 
     @staticmethod
     def write_vol_dens(results, output_prefix, config):
@@ -498,6 +497,5 @@ class POVME:
         # if the user requested a volumetric density map, then generate it here
         if config.save_volumetric_density_map:
             self.write_vol_dens(results, output_prefix, config)
-
 
         return results_vol

@@ -1,6 +1,24 @@
-# To run the POVME Pocket ID example, type the following into the unix command
-# line from the current directory:
+import glob
+import os
+import shutil
 
-# python ../../../POVME_pocket_id.py --filename rel1_example.pdb --pocket_detection_resolution 4.0 --pocket_measuring_resolution 1.0 --clashing_cutoff 3.0 --number_of_neighbors 4 --processors 4 --number_of_spheres 5 --sphere_padding 5.0
+from povme import PocketDetector
 
-# A similar command should work from the Windows command line.
+
+def test_rel1(path_rel1_config, path_rel1_output):
+    dir_output = os.path.dirname(path_rel1_output)
+    if os.path.exists(dir_output):
+        shutil.rmtree(dir_output)
+
+    pocket_id = PocketDetector(path_rel1_config)
+    pocket_id.run("./tests/files/rel1/rel1.pdb", path_rel1_output)
+
+    with open(path_rel1_output + "pocket1.pdb", "r") as f:
+        if "PointsInclusionSphere" not in f.read():
+            raise Exception(
+                "pocket1.pdb did not contain substring 'PointsInclusionSphere'"
+            )
+
+    num_output_files = len(glob.glob(path_rel1_output + "*.pdb")) - 1
+    if num_output_files != 8:
+        raise Exception("Expected 8 output files, but got " + str(num_output_files))
