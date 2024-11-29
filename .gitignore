@@ -1,2 +1,13 @@
 *.pyc
 .DS_Store
+
+# pixi environments
+.pixi
+*.egg-info
+
+# Documentation
+api
+public
+
+__pycache__
+.vscode

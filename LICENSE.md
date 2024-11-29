@@ -38,8 +38,8 @@ must show them these terms so they know their rights.
 
 Developers that use the GNU GPL protect your rights with two steps:
 
-  1. assert copyright on the software, and
-  2. offer you this License giving you legal permission to copy, distribute
+  1.  assert copyright on the software, and
+  2.  offer you this License giving you legal permission to copy, distribute
      and/or modify it.
 
 For the developers' and authors' protection, the GPL clearly explains that
@@ -101,8 +101,8 @@ network, with no transfer of a copy, is not conveying.
 An interactive user interface displays *Appropriate Legal Notices* to the
 extent that it includes a convenient and prominently visible feature that
 
-  1. displays an appropriate copyright notice, and
-  2. tells the user that there is no warranty for the work (except to the
+  1.  displays an appropriate copyright notice, and
+  2.  tells the user that there is no warranty for the work (except to the
      extent that warranties are provided), that licensees may convey the work
      under this License, and how to view a copy of this License.
 
@@ -202,18 +202,18 @@ You may convey a work based on the Program, or the modifications to produce it
 from the Program, in the form of source code under the terms of section 4,
 provided that you also meet all of these conditions:
 
-  - a) The work must carry prominent notices stating that you modified it, and
+-   a) The work must carry prominent notices stating that you modified it, and
     giving a relevant date.
-  - b) The work must carry prominent notices stating that it is released under
+-   b) The work must carry prominent notices stating that it is released under
     this License and any conditions added under section 7. This requirement
     modifies the requirement in section 4 to *keep intact all notices*.
-  - c) You must license the entire work, as a whole, under this License to
+-   c) You must license the entire work, as a whole, under this License to
     anyone who comes into possession of a copy. This License will therefore
     apply, along with any applicable section 7 additional terms, to the whole
     of the work, and all its parts, regardless of how they are packaged. This
     License gives no permission to license the work in any other way, but it
     does not invalidate such permission if you have separately received it.
-  - d) If the work has interactive user interfaces, each must display
+-   d) If the work has interactive user interfaces, each must display
     Appropriate Legal Notices; however, if the Program has interactive
     interfaces that do not display Appropriate Legal Notices, your work need
     not make them do so.
@@ -233,26 +233,26 @@ You may convey a covered work in object code form under the terms of sections 4
 and 5, provided that you also convey the machine-readable Corresponding Source
 under the terms of this License, in one of these ways:
 
-  - a) Convey the object code in, or embodied in, a physical product (including
+-   a) Convey the object code in, or embodied in, a physical product (including
     a physical distribution medium), accompanied by the Corresponding Source
     fixed on a durable physical medium customarily used for software
     interchange.
-  - b) Convey the object code in, or embodied in, a physical product (including
+-   b) Convey the object code in, or embodied in, a physical product (including
     a physical distribution medium), accompanied by a written offer, valid for
     at least three years and valid for as long as you offer spare parts or
     customer support for that product model, to give anyone who possesses the
     object code either
-    1. a copy of the Corresponding Source for all the software in the product
+    1.  a copy of the Corresponding Source for all the software in the product
        that is covered by this License, on a durable physical medium
        customarily used for software interchange, for a price no more than your
        reasonable cost of physically performing this conveying of source, or
-    2. access to copy the Corresponding Source from a network server at no
+    2.  access to copy the Corresponding Source from a network server at no
        charge.
-  - c) Convey individual copies of the object code with a copy of the written
+-   c) Convey individual copies of the object code with a copy of the written
     offer to provide the Corresponding Source. This alternative is allowed only
     occasionally and noncommercially, and only if you received the object code
     with such an offer, in accord with subsection 6b.
-  - d) Convey the object code by offering access from a designated place
+-   d) Convey the object code by offering access from a designated place
     (gratis or for a charge), and offer equivalent access to the Corresponding
     Source in the same way through the same place at no further charge. You
     need not require recipients to copy the Corresponding Source along with the
@@ -263,7 +263,7 @@ under the terms of this License, in one of these ways:
     Corresponding Source. Regardless of what server hosts the Corresponding
     Source, you remain obligated to ensure that it is available for as long as
     needed to satisfy these requirements.
-  - e) Convey the object code using peer-to-peer transmission, provided you
+-   e) Convey the object code using peer-to-peer transmission, provided you
     inform other peers where the object code and Corresponding Source of the
     work are being offered to the general public at no charge under subsection
     6d.
@@ -274,9 +274,9 @@ object code work.
 
 A *User Product* is either
 
-  1. a *consumer product*, which means any tangible personal property which is
+  1.  a *consumer product*, which means any tangible personal property which is
      normally used for personal, family, or household purposes, or
-  2. anything designed or sold for incorporation into a dwelling.
+  2.  anything designed or sold for incorporation into a dwelling.
 
 In determining whether a product is a consumer product, doubtful cases shall be
 resolved in favor of coverage. For a particular product received by a
@@ -338,19 +338,19 @@ Notwithstanding any other provision of this License, for material you add to a
 covered work, you may (if authorized by the copyright holders of that material)
 supplement the terms of this License with terms:
 
-  - a) Disclaiming warranty or limiting liability differently from the terms of
+-   a) Disclaiming warranty or limiting liability differently from the terms of
     sections 15 and 16 of this License; or
-  - b) Requiring preservation of specified reasonable legal notices or author
+-   b) Requiring preservation of specified reasonable legal notices or author
     attributions in that material or in the Appropriate Legal Notices displayed
     by works containing it; or
-  - c) Prohibiting misrepresentation of the origin of that material, or
+-   c) Prohibiting misrepresentation of the origin of that material, or
     requiring that modified versions of such material be marked in reasonable
     ways as different from the original version; or
-  - d) Limiting the use for publicity purposes of names of licensors or authors
+-   d) Limiting the use for publicity purposes of names of licensors or authors
     of the material; or
-  - e) Declining to grant rights under trademark law for use of some trade
+-   e) Declining to grant rights under trademark law for use of some trade
     names, trademarks, or service marks; or
-  - f) Requiring indemnification of licensors and authors of that material by
+-   f) Requiring indemnification of licensors and authors of that material by
     anyone who conveys the material (or modified versions of it) with
     contractual assumptions of liability to the recipient, for any liability
     that these contractual assumptions directly impose on those licensors and
@@ -383,9 +383,9 @@ patent licenses granted under the third paragraph of section 11).
 However, if you cease all violation of this License, then your license from a
 particular copyright holder is reinstated
 
-  - a) provisionally, unless and until the copyright holder explicitly and
+-   a) provisionally, unless and until the copyright holder explicitly and
     finally terminates your license, and
-  - b) permanently, if the copyright holder fails to notify you of the
+-   b) permanently, if the copyright holder fails to notify you of the
     violation by some reasonable means prior to 60 days after the cessation.
 
 Moreover, your license from a particular copyright holder is reinstated
@@ -466,10 +466,10 @@ Corresponding Source of the work is not available for anyone to copy, free of
 charge and under the terms of this License, through a publicly available
 network server or other readily accessible means, then you must either
 
-  1. cause the Corresponding Source to be so available, or
-  2. arrange to deprive yourself of the benefit of the patent license for this
+  1.  cause the Corresponding Source to be so available, or
+  2.  arrange to deprive yourself of the benefit of the patent license for this
      particular work, or
-  3. arrange, in a manner consistent with the requirements of this License, to
+  3.  arrange, in a manner consistent with the requirements of this License, to
      extend the patent license to downstream recipients.
 
 *Knowingly relying* means you have actual knowledge that, but for the patent
@@ -494,9 +494,9 @@ conveying the work, and under which the third party grants, to any of the
 parties who would receive the covered work from you, a discriminatory patent
 license
 
-  - a) in connection with copies of the covered work conveyed by you (or copies
+-   a) in connection with copies of the covered work conveyed by you (or copies
     made from those copies), or
-  - b) primarily for and in connection with specific products or compilations
+-   b) primarily for and in connection with specific products or compilations
     that contain the covered work, unless you entered into that arrangement, or
     that patent license was granted, prior to 28 March 2007.
 
@@ -593,31 +593,31 @@ them to the start of each source file to most effectively state the exclusion
 of warranty; and each file should have at least the *copyright* line and a
 pointer to where the full notice is found.
 
-	<one line to give the program's name and a brief idea of what it does.>
-	Copyright (C) <year>  <name of author>
-	
-	This program is free software: you can redistribute it and/or modify
-	it under the terms of the GNU General Public License as published by
-	the Free Software Foundation, either version 3 of the License, or
-	(at your option) any later version.
-	
-	This program is distributed in the hope that it will be useful,
-	but WITHOUT ANY WARRANTY; without even the implied warranty of
-	MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-	GNU General Public License for more details.
-	
-	You should have received a copy of the GNU General Public License
-	along with this program.  If not, see <http://www.gnu.org/licenses/>.
+ <one line to give the program's name and a brief idea of what it does.>
+ Copyright (C) <year>  <name of author>
+
+ This program is free software: you can redistribute it and/or modify
+ it under the terms of the GNU General Public License as published by
+ the Free Software Foundation, either version 3 of the License, or
+ (at your option) any later version.
+
+ This program is distributed in the hope that it will be useful,
+ but WITHOUT ANY WARRANTY; without even the implied warranty of
+ MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
+ GNU General Public License for more details.
+
+ You should have received a copy of the GNU General Public License
+ along with this program.  If not, see <http://www.gnu.org/licenses/>.
 
 Also add information on how to contact you by electronic and paper mail.
 
 If the program does terminal interaction, make it output a short notice like
 this when it starts in an interactive mode:
 
-	<program>  Copyright (C) <year>  <name of author>
-	This program comes with ABSOLUTELY NO WARRANTY; for details type `show w'.
-	This is free software, and you are welcome to redistribute it
-	under certain conditions; type `show c' for details.
+ <program>  Copyright (C) <year>  <name of author>
+ This program comes with ABSOLUTELY NO WARRANTY; for details type `show w'.
+ This is free software, and you are welcome to redistribute it
+ under certain conditions; type `show c' for details.
 
 The hypothetical commands `show w` and `show c` should show the appropriate
 parts of the General Public License. Of course, your program's commands might

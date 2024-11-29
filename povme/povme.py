@@ -1,1079 +1,37 @@
-# POVME 2.2.2 is released under the GNU General Public License (see
-# http://www.gnu.org/licenses/gpl.html). If you have any questions, comments,
-# or suggestions, please don't hesitate to contact me, Jacob Durrant, at
-# durrantj [at] pitt [dot] edu.
-#
-# If you use POVME in your work, please cite:
-#
-#    Durrant, J. D., C. A. de Oliveira, et al. (2011). "POVME: An algorithm
-#    for measuring binding-pocket volumes." J Mol Graph Model 29(5): 773-776.
-#
-#    Durrant, J. D., L. Votapka, et al. (2014). "Povme 2.0: An Enhanced Tool
-#    for Determining Pocket Shape and Volume Characteristics." J Chem Theory
-#    Comput 10.11: 5047-56.
+from typing import Any
 
-import math
+import os
+import shutil
 import sys
 import time
-import numpy
-from . import pymolecule
-import os
-import random
-import multiprocessing
-import platform
-from functools import reduce
-from .__init__ import __version__
-from .common import (
-    openfile,
-    gzopenfile,
-    fix_filename,
-    setup_testing_dir,
-    delete_testing_dir,
-    test_passed,
-)
-import shutil
+from io import StringIO
 
-try:
-    from io import StringIO
-except:
-    from io import StringIO
-
+import numpy as np
+from loguru import logger
 from scipy.spatial.distance import cdist
-from scipy.spatial.distance import pdist
-from scipy.spatial.distance import squareform
 
+from . import pymolecule
+from .config import POVMEConfig
+from .hull import MultithreadingCalcVolumeTask
+from .io import dx_freq, gzopenfile, numpy_to_pdb, openfile, write_to_file
+from .parallel import MultiThreading, MultithreadingTaskGeneral
+from .region import Region
 
-def write_to_file(fo, s, encode=True):
-    """Writes to a file, encoding if necessary.
 
-    Arguments:
-        fo -- The file object.
-        s -- The string to write.
-        encode (bool, optional) -- Whether to encode the file before writing.
-            Defaults to True.
-
-    """
-
-    if encode:
-        s = s.encode()
-
-    fo.write(s)
-
-
-def log(astr, parameters):
-    """Output POVME statements, either to the screen or to a file.
-
-    Arguments:
-    astr -- The string to output.
-    parameters -- The user-defined parameters.
-
-    """
-
-    # Print the output to the screen.
-    print(astr)
-
-    # Save it to the output file as well.
-    try:
-        if parameters["CompressOutput"] == True:
-            f = gzopenfile(parameters["OutputFilenamePrefix"] + "output.txt.gz", "ab")
-        else:
-            f = open(parameters["OutputFilenamePrefix"] + "output.txt", "a")
-
-        write_to_file(f, astr + "\n", encode=parameters["CompressOutput"])
-
-        f.close()
-    except:
-        pass
-
-
-class Multithreading:
-    """A class for running calculations on multiple processors."""
-
-    results = []
-
-    def __init__(self, inputs, num_processors, task_class):
-        """Launches a calculation on multiple processors.
-
-        Arguments:
-        inputs -- A list, containing all the input required for the
-            calculation.
-        num_processors -- An integer, the requested number of processors to
-            use.
-        task_class -- An class, the class governing what calculations will be
-            run on a given thread.
-
-        Returns:
-        Nothing, though the objects self.results list is populated with the
-            calculation results
-
-        """
-
-        self.results = []
-
-        # If it's windows, you can only use one processor.
-        if num_processors != 1 and (
-            platform.system().upper()[:3] == "WIN" or "NT" in platform.system().upper()
-        ):
-            print(
-                "WARNING: Use of multiple processors is not supported in Windows. Proceeding with one processor..."
-            )
-            num_processors = 1
-
-        if num_processors == 1:  # so just running on 1 processor, perhaps under windows
-            single_thread = task_class()
-            single_thread.total_num_tasks = len(inputs)
-
-            single_thread.results = []
-            for item in inputs:
-                single_thread.value_func(item, None)
-
-            self.results = single_thread.results
-
-        else:  # so it actually is running on multiple processors
-
-            cpu_count = 1
-            cpu_count = multiprocessing.cpu_count()
-
-            # first, if num_processors <= 0, determine the number of
-            # processors to use programatically
-            if num_processors <= 0:
-                num_processors = cpu_count
-
-            # reduce the number of processors if too many have been specified
-            if len(inputs) < num_processors:
-                num_processors = len(inputs)
-
-            # if there are no inputs, there's nothing to do.
-            if len(inputs) == 0:
-                self.results = []
-                return
-
-            # now, divide the inputs into the appropriate number of processors
-            inputs_divided = {t: [] for t in range(num_processors)}
-            for t in range(0, len(inputs), num_processors):
-                for t2 in range(num_processors):
-                    index = t + t2
-                    if index < len(inputs):
-                        inputs_divided[t2].append(inputs[index])
-
-            # now, run each division on its own processor
-            running = multiprocessing.Value("i", num_processors)
-            mutex = multiprocessing.Lock()
-
-            arrays = []
-            threads = []
-            for _ in range(num_processors):
-                athread = task_class()
-                athread.total_num_tasks = len(inputs)
-
-                threads.append(athread)
-                arrays.append(multiprocessing.Array("i", [0, 1]))
-
-            results_queue = multiprocessing.Queue()  # to keep track of the results
-
-            processes = []
-            for i in range(num_processors):
-                p = multiprocessing.Process(
-                    target=threads[i].runit,
-                    args=(running, mutex, results_queue, inputs_divided[i]),
-                )
-                p.start()
-                processes.append(p)
-
-            is_running = 0  # wait for everything to finish
-
-            while running.value > 0:
-                pass
-            # compile all results into one list
-            for _ in threads:
-                chunk = results_queue.get()
-                self.results.extend(chunk)
-
-
-class MultithreadingTaskGeneral:
-    """A parent class of others that governs what calculations are run on each
-    thread"""
-
-    results = []
-
-    def runit(self, running, mutex, results_queue, items):
-        """Launches the calculations on this thread
-
-        Arguments:
-        running -- A multiprocessing.Value object.
-        mutex -- A multiprocessing.Lock object.
-        results_queue -- A multiprocessing.Queue() object for storing the
-            calculation output.
-        items -- A list, the input data required for the calculation.
-
-        """
-
-        for item in items:
-            self.value_func(item, results_queue)
-
-        mutex.acquire()
-        running.value -= 1
-        mutex.release()
-        results_queue.put(self.results)
-
-    def value_func(self, item, results_queue):  # so overwriting this function
-        """The definition that actually does the work.
-
-        Arguments:
-        item -- A list or tuple, the input data required for the calculation.
-        results_queue -- A multiprocessing.Queue() object for storing the
-            calculation output.
-
-        """
-
-        # input1 = item[0]
-        # input2 = item[1]
-        # input3 = item[2]
-        # input4 = item[3]
-        # input5 = item[4]
-        # input6 = item[5]
-
-        # use inputs to come up with a result, some_result
-
-        # self.results.append(some_result)
-
-        pass
-
-
-class ConvexHull:
-    """A class to handle convex-hull calculations."""
-
-    def get_seg_dict_num(self, seg_dict, seg_index):
-        """seg_dict is a dictionary object that contains information about
-        segments within the convex hull. The keys are 2x3 tuples, which
-        represent two ends of a segment in space. The values of seg_dict are
-        the number of times a segment has been part of a triangle, either 1 or
-        2. (Zero times would mean that the segment doesn't exist in the
-        dictionary yet). This function looks up and returns the value of a
-        seg_index from seg_dict
-
-        Arguments:
-        seg_dict -- the dictionary of segment 2x3 tuples as keys, integers as
-            values.
-        seg_index -- the key of the dictionary member we are going to retrieve
-
-        Returns:
-        if seg_index exists in the keys of seg_dict, return the value.
-            Otherwise, return 0.
-
-        """
-
-        # we want the index with the greater x-value, so we don't get
-        # identical segments in the dictionary more than once
-        index = seg_index if seg_index[0][0] > seg_index[1][0] else seg_index[::-1]
-        if index in seg_dict:
-            return seg_dict[index]
-        else:
-            return 0
-
-    def increment_seg_dict(self, seg_dict, seg_index):
-        """seg_dict is a dictionary object that contains information about
-        segments within the convex hull. The keys are 2x3 tuples, which
-        represent two ends of a segment in space. The values of seg_dict are
-        the number of times a segment has been part of a triangle, either 1 or
-        2. (Zero times would mean that the segment doesn't exist in the
-        dictionary yet). This function increments the values within seg_dict,
-        or initiates them if they dont exist yet.
-
-        Arguments:
-        seg_dict -- the dictionary of segment 2x3 tuples as keys, integers as
-            values.
-        seg_index -- the key of the dictionary member we are going to
-            increment.
-
-        Returns:
-        None: the values of seg_dict are received and modified by reference.
-        """
-
-        # we want the index with the greater x-value, so we don't get
-        # identical segments in the dictionary more than once
-        if seg_index[0][0] > seg_index[1][0]:
-            index = seg_index
-        else:
-            index = seg_index[::-1]
-
-        # "putting index:", index, "into seg_dict because", index[0][0], ">", index[1][0]
-
-        if index in seg_dict:  # if the entry already exists in seg_dict
-            seg_dict[index] += 1  # increment
-        else:
-            # initiate with a value of 1 because it now exists on a triangle
-            seg_dict[index] = 1
-        return
-
-    def gift_wrapping_3d(self, raw_points):
-        """Gift wrapping for 3d convex hull.
-
-        Arguments:
-        raw_points -- A nx3 array of points, where each row corresponds to an
-            x,y,z point coordinate.
-
-        Returns:
-        A convex hull represented by a list of triangles. Each triangle is a
-            3x3 array, where each row is an x,y,z coordinate in space. The 3
-            rows describe the location of the 3 corners of the triangle. Each
-            of the 3 points are arranged so that a cross product will point
-            outwards from the hull.
-
-        """
-
-        n = numpy.shape(raw_points)[0]  # number of points
-        point1 = raw_points[0]  # take the first point
-        # create a ref vector pointing along x axis
-        xaxis = numpy.array([1, 0, 0])
-        maxx = raw_points[0][0]  # initiate highest x value
-        points = []  # a list of tuples for easy dictionary lookup
-        seg_dict = {}  # a dictionary that contains the number of triangles a seg is in
-
-        begintime = time.time()
-        for i in range(n):  # find the n with the largest x value
-            point = tuple(raw_points[i])
-            points.append(point)
-            if point[0] > maxx:
-                maxx = point[0]
-                point1 = raw_points[i]
-        # print "find max x:", time.time() - begintime
-
-        best_dot = -1.0  # initiate dot relative to x-axis
-        point2 = numpy.array(raw_points[1])  # initiate best segment
-
-        # find first/best segment
-        begintime = time.time()
-        for i in range(n):
-            pointi = raw_points[i]
-            if numpy.array_equal(pointi, point1):
-                continue
-            diff_vec = pointi - point1
-            diff_len = numpy.linalg.norm(diff_vec)
-
-            test_dot = numpy.dot(diff_vec / diff_len, xaxis)
-            if test_dot > best_dot:
-                best_dot = test_dot
-                point2 = pointi
-
-        # print "find first segment:", time.time() - begintime
-        point1 = tuple(point1)
-        point2 = tuple(point2)
-        ref_vec = xaxis
-
-        # now find the best triangle
-        triangles = []
-
-        seg_list = {(point1, point2)}
-        norm_dict = {(point1, point2): xaxis}
-        self.increment_seg_dict(seg_dict, (point1, point2))
-
-        counter = 0
-        first_time = True
-
-        while (
-            seg_list
-        ):  # as long as there are unexplored edges of triangles in the hull...
-
-            counter += 1
-            seg = seg_list.pop()  # take a segment out of the seg_list
-            tuple1 = seg[0]  # the two ends of the segment
-            tuple2 = seg[1]
-            point1 = numpy.array(seg[0])
-            point2 = numpy.array(seg[1])
-            result = self.get_seg_dict_num(seg_dict, (seg[0], seg[1]))
-
-            if result >= 2:  # then we already have 2 triangles on this segment
-                continue  # forget about drawing a triangle for this seg
-
-            # get the norm for a triangle that the segment is part of
-            ref_vec = norm_dict[(seg[0], seg[1])]
-
-            best_dot_cross = -1.0
-            best_point = None
-
-            for i in range(n):  # look at each point
-
-                pointi = raw_points[i]
-                # if numpy.array_equal(pointi, point1) or numpy.array_equal(pointi, point2): continue # if we are trying one of the points that are point1 or point2
-                diff_vec1 = point2 - point1
-                # diff_len1 = numpy.linalg.norm(diff_vec1)
-                diff_vec2 = pointi - point2
-                # diff_len2 = numpy.linalg.norm(diff_vec2)
-
-                # test_cross = numpy.cross(diff_vec1/diff_len1,diff_vec2/diff_len2)
-                # test_cross = numpy.cross(diff_vec1,diff_vec2)
-                test_cross = numpy.array(
-                    [
-                        diff_vec1[1] * diff_vec2[2] - diff_vec1[2] * diff_vec2[1],
-                        diff_vec1[2] * diff_vec2[0] - diff_vec1[0] * diff_vec2[2],
-                        diff_vec1[0] * diff_vec2[1] - diff_vec1[1] * diff_vec2[0],
-                    ]
-                )  # cross product
-
-                # numpy.linalg.norm(test_cross) # get the norm of the cross product
-                test_cross_len = numpy.sqrt(
-                    test_cross[0] * test_cross[0]
-                    + test_cross[1] * test_cross[1]
-                    + test_cross[2] * test_cross[2]
-                )
-
-                if test_cross_len <= 0.0:
-                    continue
-                # test_cross_len_inv = 1 / test_cross_len
-                test_cross = test_cross / test_cross_len
-                dot_cross = numpy.dot(test_cross, ref_vec)
-                # dot_cross = test_cross[0]*ref_vec[0] + test_cross[1]*ref_vec[1] + test_cross[2]*ref_vec[2]
-                if dot_cross > best_dot_cross:
-                    best_cross = test_cross
-                    best_dot_cross = dot_cross
-                    best_point = pointi
-                    tuple3 = points[i]
-
-            point3 = best_point
-
-            if self.get_seg_dict_num(seg_dict, (tuple2, tuple1)) > 2:
-                continue
-            if self.get_seg_dict_num(seg_dict, (tuple3, tuple2)) > 2:
-                continue
-            if self.get_seg_dict_num(seg_dict, (tuple1, tuple3)) > 2:
-                continue
-
-            # now we have a triangle from point1 -> point2 -> point3 must test
-            # each edge
-            if first_time:
-                self.increment_seg_dict(seg_dict, (tuple2, tuple1))
-                seg_list.add((tuple2, tuple1))
-                norm_dict[(tuple2, tuple1)] = best_cross
-
-            self.increment_seg_dict(seg_dict, (tuple3, tuple2))
-            seg_list.add((tuple3, tuple2))
-            norm_dict[(tuple3, tuple2)] = best_cross
-
-            self.increment_seg_dict(seg_dict, (tuple1, tuple3))
-            seg_list.add((tuple1, tuple3))
-            norm_dict[(tuple1, tuple3)] = best_cross
-
-            triangles.append(
-                (numpy.array(tuple1), numpy.array(tuple2), numpy.array(tuple3))
-            )
-
-            first_time = False
-
-        # print "find all triangles:", time.time() - begintime
-
-        # print "section1:", section1
-        # print "section2:", section2
-        # print "section3:", section3
-        return triangles
-
-    def akl_toussaint(self, points):
-        """The Akl-Toussaint Heuristic. Given a set of points, this definition
-        will create an octahedron whose corners are the extremes in x, y, and
-        z directions. Every point within this octahedron will be removed
-        because they are not part of the convex hull. This causes any expected
-        running time for a convex hull algorithm to be reduced to linear time.
-
-        Arguments:
-        points -- An nx3 array of x,y,z coordinates.
-
-        Returns:
-        All members of original set of points that fall outside the
-            Akl-Toussaint octahedron.
-
-        """
-
-        x_high = (-1e99, 0, 0)
-        x_low = (1e99, 0, 0)
-        y_high = (0, -1e99, 0)
-        y_low = (0, 1e99, 0)
-        z_high = (0, 0, -1e99)
-        z_low = (0, 0, 1e99)
-
-        for point in points:  # find the corners of the octahedron
-            if point[0] > x_high[0]:
-                x_high = point
-            if point[0] < x_low[0]:
-                x_low = point
-            if point[1] > y_high[1]:
-                y_high = point
-            if point[1] < y_low[1]:
-                y_low = point
-            if point[2] > z_high[2]:
-                z_high = point
-            if point[2] < z_low[2]:
-                z_low = point
-
-        octahedron = [  # define the triangles of the surfaces of the octahedron
-            numpy.array((x_high, y_high, z_high)),
-            numpy.array((x_high, z_low, y_high)),
-            numpy.array((x_high, y_low, z_low)),
-            numpy.array((x_high, z_high, y_low)),
-            numpy.array((x_low, y_low, z_high)),
-            numpy.array((x_low, z_low, y_low)),
-            numpy.array((x_low, y_high, z_low)),
-            numpy.array((x_low, z_high, y_high)),
-        ]
-        new_points = []  # everything outside of the octahedron
-        for (
-            point
-        ) in points:  # now check to see if a point is inside or outside the octahedron
-            outside = self.outside_hull(point, octahedron, epsilon=-1.0e-5)
-            if outside:
-                new_points.append(point)
-
-        return numpy.array(new_points)  # convert back to an array
-
-    def outside_hull(self, our_point, triangles, epsilon=1.0e-5):
-        """Given the hull as defined by a list of triangles, this definition
-        will return whether a point is within these or not.
-
-        Arguments:
-        our_point -- an x,y,z array that is being tested to see whether it
-            exists inside the hull or not.
-        triangles -- a list of triangles that define the hull.
-        epsilon -- needed for imprecisions in the floating-point operations.
-
-        Returns:
-        True if our_point exists outside of the hull, False otherwise
-
-        """
-
-        our_point = numpy.array(our_point)  # convert it to an numpy.array
-        for triangle in triangles:
-            # vector from triangle corner 0 to point
-            rel_point = our_point - triangle[0]
-            # vector from triangle corner 0 to corner 1
-            vec1 = triangle[1] - triangle[0]
-            # vector from triangle corner 1 to corner 2
-            vec2 = triangle[2] - triangle[1]
-            # cross product between vec1 and vec2
-            our_cross = numpy.cross(vec1, vec2)
-            # dot product to determine whether cross is point inward or
-            # outward
-            our_dot = numpy.dot(rel_point, our_cross)
-            # if the dot is greater than 0, then its outside
-            if numpy.dot(rel_point, our_cross) > epsilon:
-                return True
-
-        return False
-
-
-def unique_rows(a):
+def get_unique_rows(a):
     """Identifies unique points (rows) in an array of points.
 
     Arguments:
-    a -- A nx3 numpy.array representing 3D points.
+        a: A nx3 numpy.array representing 3D points.
 
     Returns:
-    A nx2 numpy.array containing the 3D points that are unique.
+        A nx2 numpy.array containing the 3D points that are unique.
 
     """
 
     a[a == -0.0] = 0.0
-    b = numpy.ascontiguousarray(a).view(
-        numpy.dtype((numpy.void, a.dtype.itemsize * a.shape[1]))
-    )
-    return numpy.unique(b).view(a.dtype).reshape(-1, a.shape[1])  # unique_a
-
-
-def create_pdb_line(numpy_array, index, resname, letter):
-    """Create a string formatted according to the PDB standard.
-
-    Arguments:
-    numpy_array -- A 1x3 numpy.array representing a 3D point.
-    letter -- A string, the atom name/chain/etc to use for the output.
-
-    Returns:
-    A string, formatted according to the PDB standard.
-
-    """
-
-    if len(numpy_array) == 2:
-        numpy_array = numpy.array([numpy_array[0], numpy_array[1], 0.0])
-    if numpy_array.shape == (1, 3):
-        numpy_array = numpy_array[0]
-
-    output = "ATOM "
-    output = (
-        output
-        + str(index % 999999).rjust(6)
-        + letter.rjust(5)
-        + resname.rjust(4)
-        + letter.rjust(2)
-        + str(index % 9999).rjust(4)
-    )
-    output += ("%.3f" % numpy_array[0]).rjust(12)
-    output += ("%.3f" % numpy_array[1]).rjust(8)
-    output += ("%.3f" % numpy_array[2]).rjust(8)
-    output += letter.rjust(24)
-
-    return output
-
-
-def numpy_to_pdb(narray, letter, resname=""):
-    """Create a string formatted according to the PDB standard.
-
-    Arguments:
-    narray -- A nx3 numpy.array representing a 3D point.
-    letter -- A string, the atom name/chain/etc to use for the output.
-
-    Returns:
-    (Optionally) A string, formatted according to the PDB standard.
-
-    """
-
-    if len(narray.flatten()) == 3:
-        return create_pdb_line(narray, 1, "AAA", letter) + "\n"
-    else:
-        if resname == "":
-            letters = [
-                "A",
-                "B",
-                "C",
-                "D",
-                "E",
-                "F",
-                "G",
-                "H",
-                "I",
-                "J",
-                "K",
-                "L",
-                "M",
-                "N",
-                "O",
-                "P",
-                "Q",
-                "R",
-                "S",
-                "T",
-                "U",
-                "V",
-                "W",
-                "X",
-                "Y",
-                "Z",
-            ]
-            resnames = []
-            for l1 in letters:
-                for l2 in letters:
-                    for l3 in letters:
-                        resnames.append(l1 + l2 + l3)
-            resnames.remove("XXX")  # because this is reserved for empty atoms
-        else:
-            resnames = [resname]
-
-        t = ""
-        for i, item in enumerate(narray):
-            t = (
-                t
-                + create_pdb_line(item, i + 1, resnames[i % len(resnames)], letter)
-                + "\n"
-            )
-        return t
-
-
-def dx_freq(freq_mat, parameters):
-    """Generates a DX file that records the frequency that a volume element is
-    open.
-
-    Arguments:
-    freq_mat -- a Nx4 matrix, where the first 3 columns are the x,y,z coords
-        of the point, and the 4th column is the frequency of emptiness for that
-        point in space
-
-    """
-
-    # 1. Sort the points into the proper order for a dx file
-
-    # already sorted correctly
-
-    # 2. Obtain key information about the grid
-    N = freq_mat.shape[0]  # number of data points
-
-    minx = min(freq_mat[:, 0])
-    miny = min(freq_mat[:, 1])
-    minz = min(freq_mat[:, 2])  # find the upper and lower corners of the grid
-    maxx = max(freq_mat[:, 0])
-    maxy = max(freq_mat[:, 1])
-    maxz = max(freq_mat[:, 2])
-
-    widthx = maxx - minx  # find the widths of the grid
-    widthy = maxy - miny
-    widthz = maxz - minz
-
-    xs = numpy.unique(freq_mat[:, 0])
-    ys = numpy.unique(freq_mat[:, 1])
-    zs = numpy.unique(freq_mat[:, 2])
-
-    resx = xs[1] - xs[0]
-    resy = ys[1] - ys[0]
-    resz = zs[1] - zs[0]
-
-    # resx = freq_mat[(widthz+1)*(widthy+1),0] - freq_mat[0,0]
-    # resy = freq_mat[widthz+1,1] - freq_mat[0,1] # find the resolution of the grid
-    # resz = freq_mat[1,2] - freq_mat[0,2]
-
-    nx = (widthx) / resx + 1  # number of grid points in each dimension
-    # need to add one because the subtraction leaves out an entire row
-    ny = (widthy) / resy + 1
-    nz = (widthz) / resz + 1
-
-    # test to make sure all is well with the size of the grid and its
-    # dimensions
-    assert (
-        nx * ny * nz
-    ) == N, "Something is wrong with the freq_mat array: it is not a prismatic shape"
-
-    # 3. write the header and footer
-    if parameters["SaveVolumetricDensityMap"] == True:
-        if parameters["CompressOutput"] == True:
-            dx_file = gzopenfile(
-                parameters["OutputFilenamePrefix"] + "volumetric_density.dx.gz", "wb"
-            )
-        else:
-            dx_file = openfile(
-                parameters["OutputFilenamePrefix"] + "volumetric_density.dx", "w"
-            )
-
-        header_template = """# Data from POVME 2.2.2
-#
-# FREQUENCY (unitless)
-#
-object 1 class gridpositions counts %d %d %d
-origin %8.6e %8.6e %8.6e
-delta %8.6e 0.000000e+00 0.000000e+00
-delta 0.000000e+00 %8.6e 0.000000e+00
-delta 0.000000e+00 0.000000e+00 %8.6e
-object 2 class gridconnections counts %d %d %d
-object 3 class array type double rank 0 items %d data follows
-"""
-
-        header = header_template % (
-            nx,
-            ny,
-            nz,
-            minx,
-            miny,
-            minz,
-            resx,
-            resy,
-            resz,
-            nx,
-            ny,
-            nz,
-            N,
-        )  # format the header
-        footer_template = """
-attribute "dep" string "positions"
-object "regular positions regular connections" class field
-component "positions" value 1
-component "connections" value 2
-component "data" value 3"""
-
-        footer = footer_template  # the footer needs no formatting
-        write_to_file(dx_file, header, encode=parameters["CompressOutput"])
-        newline_counter = 1
-        for i in range(N):  # write the data to the DX file
-            write_to_file(
-                dx_file, "%8.6e" % freq_mat[i, 3], encode=parameters["CompressOutput"]
-            )
-            if newline_counter == 3:
-                newline_counter = 0
-                write_to_file(dx_file, "\n", encode=parameters["CompressOutput"])
-            else:
-                write_to_file(dx_file, " ", encode=parameters["CompressOutput"])
-            newline_counter += 1
-        write_to_file(dx_file, footer, encode=parameters["CompressOutput"])
-        dx_file.close
-    return
-
-
-class MultithreadingCalcVolumeTask(MultithreadingTaskGeneral):
-    """A class for calculating the volume."""
-
-    def value_func(self, item, results_queue):
-        """Calculate the volume.
-
-        Arguments:
-        item -- A list or tuple, the input data required for the calculation.
-        results_queue -- A multiprocessing.Queue() object for storing the
-            calculation output.
-
-        """
-
-        frame_indx = item[0]
-        pdb = item[1]
-        parameters = item[2]
-        # pts = parameters['pts_orig'].copy() # this works
-        pts = parameters["pts_orig"]  # also works, so keep because faster
-
-        # if the user wants to save empty points (points that are removed),
-        # then we need a copy of the original
-        if parameters["OutputEqualNumPointsPerFrame"] == True:
-            pts_deleted = pts.copy()
-
-        # you may need to load it from disk if the user so specified
-        if parameters["UseDiskNotMemory"] == True:  # so you need to load it from disk
-            pym_filename = pdb
-            pdb = pymolecule.Molecule()
-            pdb.fileio.load_pym_into(pym_filename)
-
-        # remove the points that are far from the points region anyway
-        min_pts = numpy.min(pts, 0) - parameters["DistanceCutoff"] - 1
-        max_pts = numpy.max(pts, 0) + parameters["DistanceCutoff"] + 1
-
-        # identify atoms that are so far away from points that they can be
-        # ignored. First, x's too small.
-        index_to_keep1 = numpy.nonzero(
-            (pdb.information.coordinates[:, 0] > min_pts[0])
-        )[0]
-
-        # x's too large
-        index_to_keep2 = numpy.nonzero(
-            (pdb.information.coordinates[:, 0] < max_pts[0])
-        )[0]
-
-        # y's too small
-        index_to_keep3 = numpy.nonzero(
-            (pdb.information.coordinates[:, 1] > min_pts[1])
-        )[0]
-
-        # y's too large
-        index_to_keep4 = numpy.nonzero(
-            (pdb.information.coordinates[:, 1] < max_pts[1])
-        )[0]
-
-        # z's too small
-        index_to_keep5 = numpy.nonzero(
-            (pdb.information.coordinates[:, 2] > min_pts[2])
-        )[0]
-
-        # z's too large
-        index_to_keep6 = numpy.nonzero(
-            (pdb.information.coordinates[:, 2] < max_pts[2])
-        )[0]
-
-        index_to_keep = numpy.intersect1d(
-            index_to_keep1, index_to_keep2, assume_unique=True
-        )
-        index_to_keep = numpy.intersect1d(
-            index_to_keep, index_to_keep3, assume_unique=True
-        )
-        index_to_keep = numpy.intersect1d(
-            index_to_keep, index_to_keep4, assume_unique=True
-        )
-        index_to_keep = numpy.intersect1d(
-            index_to_keep, index_to_keep5, assume_unique=True
-        )
-        index_to_keep = numpy.intersect1d(
-            index_to_keep, index_to_keep6, assume_unique=True
-        )
-
-        # keep only relevant atoms
-        if len(index_to_keep) > 0:
-            pdb = pdb.selections.create_molecule_from_selection(index_to_keep)
-
-        # get the vdw radii of each protein atom
-        vdw = numpy.ones(len(pdb.information.coordinates))  # so the default vdw is 1.0
-
-        # get vdw... you might want to fill this out with additional vdw
-        # values
-        vdw[
-            numpy.nonzero(pdb.information.atom_information["element_stripped"] == b"H")[
-                0
-            ]
-        ] = 1.2
-        vdw[
-            numpy.nonzero(pdb.information.atom_information["element_stripped"] == b"C")[
-                0
-            ]
-        ] = 1.7
-        vdw[
-            numpy.nonzero(pdb.information.atom_information["element_stripped"] == b"N")[
-                0
-            ]
-        ] = 1.55
-        vdw[
-            numpy.nonzero(pdb.information.atom_information["element_stripped"] == b"O")[
-                0
-            ]
-        ] = 1.52
-        vdw[
-            numpy.nonzero(pdb.information.atom_information["element_stripped"] == b"F")[
-                0
-            ]
-        ] = 1.47
-        vdw[
-            numpy.nonzero(pdb.information.atom_information["element_stripped"] == b"P")[
-                0
-            ]
-        ] = 1.8
-        vdw[
-            numpy.nonzero(pdb.information.atom_information["element_stripped"] == b"S")[
-                0
-            ]
-        ] = 1.8
-        vdw = numpy.repeat(numpy.array([vdw]).T, len(pts), axis=1)
-
-        # now identify the points that are close to the protein atoms
-        dists = cdist(pdb.information.coordinates, pts)
-        close_pt_index = numpy.nonzero((dists < (vdw + parameters["DistanceCutoff"])))[
-            1
-        ]
-
-        # now keep the appropriate points
-        pts = numpy.delete(pts, close_pt_index, axis=0)
-
-        # exclude points outside convex hull
-        if parameters["ConvexHullExclusion"] == True:
-            convex_hull_3d = ConvexHull()
-
-            # get the coordinates of the non-hydrogen atoms (faster to discard
-            # hydrogens)
-            hydros = pdb.selections.select_atoms({"element_stripped": [b"H"]})
-            not_hydros = pdb.selections.invert_selection(hydros)
-            not_hydros_coors = pdb.information.coordinates[not_hydros]
-
-            # not_hydros = pdb.selections.select_atoms({'name_stripped':['CA']})
-            # not_hydros_coors = pdb.information.coordinates[not_hydros]
-
-            # modify pts here.
-            # note that the atoms of the pdb frame are in pdb.information.coordinates
-            # begintime = time.time() # measure execution time
-            akl_toussaint_pts = convex_hull_3d.akl_toussaint(
-                not_hydros_coors
-            )  # quickly reduces input size
-            # print "akl Toussaint:", time.time() - begintime
-            begintime = time.time()  # measure execution time
-            # calculate convex hull using gift wrapping algorithm
-            hull = convex_hull_3d.gift_wrapping_3d(akl_toussaint_pts)
-            # print "gift_wrapping:", time.time() - begintime
-
-            # we will need to regenerate the pts list, disregarding those
-            # outside the hull
-            old_pts = pts
-            pts = []
-            for pt in old_pts:
-                pt_outside = convex_hull_3d.outside_hull(
-                    pt, hull
-                )  # check if pt is outside hull
-                if not pt_outside:
-                    # if its not outside the hull, then include it in the
-                    # volume measurement
-                    pts.append(pt)
-            pts = numpy.array(pts)
-
-        # Now, enforce contiguity if needed
-        if len(parameters["ContiguousPocketSeedRegions"]) > 0 and len(pts) > 0:
-            # first, for each point, determine how many neighbors it has to
-            # count kiddy-corner points too
-            cutoff_dist = parameters["GridSpacing"] * 1.01 * math.sqrt(3)
-            pts_dists = squareform(pdist(pts))
-            # minus 1 because an atom shouldn't be considered its own neighor
-            neighbor_counts = numpy.sum(pts_dists < cutoff_dist, axis=0) - 1
-
-            # remove all the points that don't have enough neighbors
-            pts = pts[
-                numpy.nonzero(
-                    neighbor_counts >= parameters["ContiguousPointsCriteria"]
-                )[0]
-            ]
-
-            # get all the points in the defined parameters['ContiguousPocket']
-            # seed regions
-            contig_pts = parameters["ContiguousPocketSeedRegions"][0].points_set(
-                parameters["GridSpacing"]
-            )
-            for Contig in parameters["ContiguousPocketSeedRegions"][1:]:
-                contig_pts = numpy.vstack(
-                    (contig_pts, Contig.points_set(parameters["GridSpacing"]))
-                )
-            contig_pts = unique_rows(contig_pts)
-
-            try:  # error here if there are no points of contiguous seed region outside of protein volume.
-                # now just get the ones that are not near the protein
-                contig_pts = pts[numpy.nonzero(cdist(contig_pts, pts) < 1e-7)[1]]
-
-                last_size_of_contig_pts = 0
-                while last_size_of_contig_pts != len(contig_pts):
-                    last_size_of_contig_pts = len(contig_pts)
-
-                    # now get the indecies of all points that are close to the
-                    # contig_pts
-                    all_pts_close_to_contig_pts_boolean = (
-                        cdist(pts, contig_pts) < cutoff_dist
-                    )
-                    index_all_pts_close_to_contig_pts = numpy.unique(
-                        numpy.nonzero(all_pts_close_to_contig_pts_boolean)[0]
-                    )
-                    contig_pts = pts[index_all_pts_close_to_contig_pts]
-
-                pts = contig_pts
-            except:
-                log(
-                    "\tFrame "
-                    + str(frame_indx)
-                    + ": None of the points in the contiguous-pocket seed region\n\t\tare outside the volume of the protein! Assuming a pocket\n\t\tvolume of 0.0 A.",
-                    parameters,
-                )
-                pts = numpy.array([])
-
-        # now write the pdb and calculate the volume
-        volume = len(pts) * math.pow(parameters["GridSpacing"], 3)
-
-        log("\tFrame " + str(frame_indx) + ": " + repr(volume) + " A^3", parameters)
-        if parameters["SaveIndividualPocketVolumes"] == True:
-            frame_text = f"REMARK Frame {str(frame_indx)}" + "\n"
-            frame_text += f"REMARK Volume = {repr(volume)}" + " Cubic Angstroms\n"
-            frame_text += numpy_to_pdb(pts, "X")
-
-            if parameters["OutputEqualNumPointsPerFrame"] == True:
-                # you need to find the points that are in pts_deleted but not
-                # in pts
-                tmp = reduce(
-                    lambda x, y: x | numpy.all(pts_deleted == y, axis=-1),
-                    pts,
-                    numpy.zeros(pts_deleted.shape[:1], dtype=numpy.bool),
-                )
-                indices = numpy.where(tmp)[0]
-                pts_deleted = numpy.delete(pts_deleted, indices, axis=0)
-
-                # So extra points will always be at the origin. These can be
-                # easily hidden with your visualization software.
-                pts_deleted = numpy.zeros(pts_deleted.shape)
-                frame_text = frame_text + numpy_to_pdb(pts_deleted, "X", "XXX")
-
-            frame_text = frame_text + "END\n"
-
-            if parameters["CompressOutput"] == True:
-                fl = gzopenfile(
-                    parameters["OutputFilenamePrefix"]
-                    + "frame_"
-                    + str(frame_indx)
-                    + ".pdb.gz",
-                    "wb",
-                )
-            else:
-                fl = openfile(
-                    parameters["OutputFilenamePrefix"]
-                    + "frame_"
-                    + str(frame_indx)
-                    + ".pdb",
-                    "w",
-                )
-            write_to_file(fl, frame_text, encode=parameters["CompressOutput"])
-            fl.close()
-
-        extra_data_to_add = {}
-        if parameters["SaveVolumetricDensityMap"] == True:
-            extra_data_to_add["SaveVolumetricDensityMap"] = pts
-
-        self.results.append((frame_indx, volume, extra_data_to_add))
-
-        # if len(extra_data_to_add.keys()) != 0:
-        # else: self.results.append((frame_indx, volume))
+    b = np.ascontiguousarray(a).view(np.dtype((np.void, a.dtype.itemsize * a.shape[1])))
+    return np.unique(b).view(a.dtype).reshape(-1, a.shape[1])  # unique_a
 
 
 class MultithreadingStringToMoleculeTask(MultithreadingTaskGeneral):
@@ -1083,26 +41,26 @@ class MultithreadingStringToMoleculeTask(MultithreadingTaskGeneral):
     def value_func(self, item, results_queue):
         """Convert a PDB string into a pymolecule.Molecule object.
 
-        Arguments:
-        item -- A list or tuple, the input data required for the calculation.
-        results_queue -- A multiprocessing.Queue() object for storing the
-            calculation output.
+        Args:
+            item: A list or tuple, the input data required for the calculation.
+            results_queue: A multiprocessing.Queue() object for storing the
+                calculation output.
 
         """
 
         pdb_string = item[0]
         index = item[1]
-        parameters = item[2]
+        config = item[2]
 
         # make the pdb object
         str_obj = StringIO(pdb_string)
         tmp = pymolecule.Molecule()
         tmp.fileio.load_pdb_into_using_file_object(str_obj, False, False, False)
 
-        log("\tFurther processing frame " + str(index), parameters)
+        logger.debug("\tFurther processing frame " + str(index))
 
         # so load the whole trajectory into memory
-        if parameters["UseDiskNotMemory"] == False:
+        if not config.use_disk_not_memory:
             self.results.append((index, tmp))
         else:  # save to disk, record filename
             pym_filename = f"./.povme_tmp/frame_{str(index)}.pym"
@@ -1110,256 +68,48 @@ class MultithreadingStringToMoleculeTask(MultithreadingTaskGeneral):
             self.results.append((index, pym_filename))
 
 
-class Region:
-    """A class for defining regions that will be filled with points."""
-
-    def __init__(self):
-        """Initialize some variables."""
-
-        self.center = numpy.array([9999.9, 9999.9, 9999.9])
-        self.radius = 9999.9  # in case the region is a sphere
-        # in case the region is a box
-        self.box_dimen = numpy.array([9999.9, 9999.9, 9999.9])
-
-        self.region_type = "SPHERE"  # could also be BOX
-
-    def __str__(self):
-        """Returns a string representation of the region."""
-
-        if self.region_type == "SPHERE":
-            return (
-                "sphere at ("
-                + str(self.center[0])
-                + ", "
-                + str(self.center[1])
-                + ", "
-                + str(self.center[2])
-                + "), radius = "
-                + str(self.radius)
-            )
-        if self.region_type == "BOX":
-            return (
-                "box centered at ("
-                + str(self.center[0])
-                + ", "
-                + str(self.center[1])
-                + ", "
-                + str(self.center[2])
-                + ") with x,y,z dimensions of ("
-                + str(self.box_dimen[0])
-                + ", "
-                + str(self.box_dimen[1])
-                + ", "
-                + str(self.box_dimen[2])
-                + ")"
-            )
-        return ""
-
-    def __snap(self, pts, reso):
-        """Snaps a set of points to a fixed grid.
-
-        Arguments:
-        pts -- A nx3 numpy.array representing 3D points.
-        reso -- A float, the resolution of the grid.
-
-        Returns:
-        A nx3 numpy.array with the 3D points snapped to the nearest grid
-            point.
-
-        """
-
-        # unfortunately, numpy.around rounds evenly, so 0.5 rounds to 0.0 and
-        # 1.5 rounds to 2.0. very annoying, I'll just add a tiny amount to 0.5
-        # => 0.500001 this should work, since user is unlikely to select region
-        # center or radius with such precision
-
-        pts = pts + 1e-10
-        return numpy.around(pts / reso) * reso
-
-    def points_set(self, reso):
-        """Generates a point field by filling the region with equally spaced
-        points.
-
-        Arguments:
-        reso -- A float, the resolution of the grid on which the points will
-            be placed.
-
-        Returns:
-        A nx3 numpy.array with the 3D points filling the region.
-
-        """
-
-        total_pts = None
-
-        if self.region_type == "BOX":
-            xs = numpy.arange(
-                self.center[0] - self.box_dimen[0] / 2,
-                self.center[0] + self.box_dimen[0] / 2,
-                reso,
-            )
-            ys = numpy.arange(
-                self.center[1] - self.box_dimen[1] / 2,
-                self.center[1] + self.box_dimen[1] / 2,
-                reso,
-            )
-            zs = numpy.arange(
-                self.center[2] - self.box_dimen[2] / 2,
-                self.center[2] + self.box_dimen[2] / 2,
-                reso,
-            )
-
-            total_pts = self._convert_xyz_to_numpy_arr(xs, ys, zs, reso)
-        elif self.region_type == "SPHERE":
-            total_pts = self._make_sphere_pts(reso)
-        return total_pts
-
-    def _make_sphere_pts(self, reso):
-        xs = numpy.arange(
-            self.center[0] - self.radius, self.center[0] + self.radius, reso
-        )
-        ys = numpy.arange(
-            self.center[1] - self.radius, self.center[1] + self.radius, reso
-        )
-        zs = numpy.arange(
-            self.center[2] - self.radius, self.center[2] + self.radius, reso
-        )
-
-        result = self._convert_xyz_to_numpy_arr(xs, ys, zs, reso)
-            # now remove all the points outside of this sphere
-        index_inside_sphere = numpy.nonzero(
-            cdist(result, numpy.array([self.center])) < self.radius
-        )[0]
-        result = result[index_inside_sphere]
-
-        return result
-
-    def _convert_xyz_to_numpy_arr(self, xs, ys, zs, reso):
-        result = numpy.empty((len(xs) * len(ys) * len(zs), 3))
-
-        i = 0
-        for x in xs:
-            for y in ys:
-                for z in zs:
-                    result[i][0] = x
-                    result[i][1] = y
-                    result[i][2] = z
-
-                    i = i + 1
-
-        result = self.__snap(result, reso)
-
-        return result
-
-
-class ConfigFile:
-    """A class for processing the user-provided configuration file."""
-
-    entities = []
-
-    def __init__(self, filename):
-        """Generates a point field by filling the region with equally spaced
-        points.
-
-        Arguments:
-        filename -- A string, the filename of the configuration file.
-
-        """
-
-        f = openfile(filename, "r")
-        lines = f.readlines()
-        f.close()
-
-        for line in lines:
-            # remove comments
-            line = line.split("#", 1)[0]
-            # line = line.split("//",1)[0] # We can't have these kinds of comments any more because of Windows filenames.
-
-            line = line.strip()
-
-            if line != "":
-
-                # replace ; and , and : with space
-                # line = line.replace(',',' ')
-                # line = line.replace(';',' ')
-                # line = line.replace(':',' ') # this messes up Windows filenames
-                line = line.replace("\t", " ")
-
-                # now strip string
-                line = line.strip()
-
-                # now, replace double spaces with one space
-                while "  " in line:
-                    line = line.replace("  ", " ")
-
-                # Now split the thing
-                line = line.split(" ", 1)
-
-                # now, make it upper case
-                line[0] = line[0].upper()
-
-                # If there's QUIT, EXIT, or STOP, then don't continue.
-                if line[0] in [b"QUIT", b"EXIT", b"STOP"]:
-                    break
-
-                self.entities.append(line)
-
-
-class RunPOVME:
+class POVME:
     """The main class to run POVME."""
 
-    def reference(self, parameters, before=""):
-        """Print out a message regarding terms of use."""
+    def __init__(
+        self,
+        path_config: str | None = None,
+    ) -> None:
+        """Initialize POVME.
 
-        log("", parameters)
-        log(
-            before
-            + "If you use POVME in your research, please cite the following reference:",
-            parameters,
-        )
-        log(
-            before
-            + '  Durrant, J. D., C. A. de Oliveira, et al. (2011). "POVME: An algorithm',
-            parameters,
-        )
-        log(
-            before
-            + '  for measuring binding-pocket volumes." J Mol Graph Model 29(5): 773-776.',
-            parameters,
-        )
+        Args:
+            path_config: Path to a configuration YAML file.
+        """
 
-    def load_multi_frame_pdb(self, filename, parameters):
+        self.config = POVMEConfig()
+        if path_config is not None:
+            self.config.from_yaml(path_config)
+
+    def load_multi_frame_pdb(self, filename, config):
         """Load a multi-frame PDB into memory or into separate files
         (depending on user specifications).
 
-        Arguments:
-        filename -- A string, the filename of the multi-frame PDB.
-        parameters -- A python dictionary, where the keys are the user-defined
-            parameter names and the values are the corresponding parameter
-            values.
+        Args:
+            filename: A string, the filename of the multi-frame PDB.
+            config: POVMEConfig object.
 
         Returns:
-        If the user has requested that the disk be used to save memory, this
-            function returns a list of tuples, where the first item in each
-            tuple is the frame index, and the second is a filename containing
-            the individual frame. If memory is to be used instead of the disk,
-            this function returns a list of tuples, where the first item in
-            each tuple is the frame index, and the second is a
-            pymolecule.Molecule object representing the frame.
+            If the user has requested that the disk be used to save memory, this
+                function returns a list of tuples, where the first item in each
+                tuple is the frame index, and the second is a filename containing
+                the individual frame. If memory is to be used instead of the disk,
+                this function returns a list of tuples, where the first item in
+                each tuple is the frame index, and the second is a
+                pymolecule.Molecule object representing the frame.
 
         """
-
         pdb_strings = []
         growing_string = ""
 
-        log("", parameters)
-        log("Reading frames from " + filename, parameters)
+        logger.info("Reading frames from " + filename)
 
         f = open(filename, "rb")
         while True:
-
-            if parameters["NumFrames"] != -1:
-                if len(pdb_strings) >= parameters["NumFrames"]:
-                    break
 
             line = f.readline()
 
@@ -1378,566 +128,374 @@ class RunPOVME:
             pdb_strings.remove("")
 
         # now convert each pdb string into a pymolecule.Molecule object
-        molecules = Multithreading(
-            [
-                (pdb_strings[idx], idx + 1, parameters)
-                for idx in range(len(pdb_strings))
-            ],
-            parameters["NumProcessors"],
+        molecules = MultiThreading(
+            [(pdb_strings[idx], idx + 1, config) for idx in range(len(pdb_strings))],
+            config.num_processors,
             MultithreadingStringToMoleculeTask,
         )
         molecules = molecules.results
 
         return molecules
 
-    def __init__(self, argv):
+    @staticmethod
+    def _get_regions_include(config):
+        regions = []
+        for inclusion_sphere in config.points_inclusion_sphere:
+            if len(inclusion_sphere) == 0:
+                continue
+            region = Region()
+            region.make_sphere(inclusion_sphere)
+            regions.append(region)
+        for inclusion_box in config.points_inclusion_box:
+            if len(inclusion_box) == 0:
+                continue
+            region = Region()
+            region.make_box(inclusion_box)
+            regions.append(region)
+        return regions
+
+    @staticmethod
+    def _get_regions_contig(config):
+        regions = []
+        for contig_sphere in config.contiguous_pocket_seed_sphere:
+            if len(contig_sphere) == 0:
+                continue
+            region = Region()
+            region.make_sphere(contig_sphere)
+            regions.append(region)
+        for contig_box in config.contiguous_pocket_seed_box:
+            if len(contig_box) == 0:
+                continue
+            region = Region()
+            region.make_box(contig_box)
+            regions.append(region)
+        return regions
+
+    @staticmethod
+    def _get_regions_exclude(config):
+        regions = []
+        for exclusion_sphere in config.points_exclusion_sphere:
+            if len(exclusion_sphere) == 0:
+                continue
+            region = Region()
+            region.make_sphere(exclusion_sphere)
+            regions.append(region)
+        for exclusion_box in config.points_exclusion_box:
+            if len(exclusion_box) == 0:
+                continue
+            region = Region()
+            region.make_box(exclusion_box)
+            regions.append(region)
+        return regions
+
+    def gen_points(self, config):
+        logger.info("Generating the pocket-encompassing point field")
+
+        # get all the points of the inclusion regions
+        regions_include = self._get_regions_include(config)
+        pts = regions_include[0].points_set(config.grid_spacing)
+        for Included in regions_include[1:]:
+            pts = np.vstack((pts, Included.points_set(config.grid_spacing)))
+        pts = get_unique_rows(pts)
+
+        # get all the points of the exclusion regions
+        regions_exclude = self._get_regions_exclude(config)
+        if len(regions_exclude) > 0:
+            pts_exclusion = regions_exclude[0].points_set(config.grid_spacing)
+            for Excluded in regions_exclude[1:]:
+                pts_exclusion = np.vstack(
+                    (pts_exclusion, Excluded.points_set(config.grid_spacing))
+                )
+            pts_exclusion = get_unique_rows(pts_exclusion)
+
+            # remove the exclusion points from the inclusion points I
+            # think there ought to be a set-based way of doing this, but
+            # I'm going to go for the pairwise comparison. consider
+            # rewriting later
+            index_to_remove = np.nonzero(cdist(pts, pts_exclusion) < 1e-7)[0]
+            pts = np.delete(pts, index_to_remove, axis=0)
+
+        return pts
+
+    @staticmethod
+    def write_points(pts, output_prefix, config):
+        logger.info("Writing points to PDB file")
+        points_filename = output_prefix + "point_field.pdb"
+
+        if config.compress_output:
+            afile = gzopenfile(points_filename + ".gz", "wb")
+        else:
+            afile = openfile(points_filename, "w")
+
+        write_to_file(afile, numpy_to_pdb(pts, "X"), encode=config.compress_output)
+        afile.close()
+
+        # save the points as npy
+        logger.info("Writing points to NPY file")
+        np.save(points_filename + ".npy", pts)
+
+        logger.info(
+            "Point field saved to " + points_filename + " to permit visualization"
+        )
+        logger.info(
+            "Point field saved to "
+            + points_filename
+            + ".npy to optionally load for the volume calculation"
+        )
+
+    def write_points_contig(self, regions_contig, output_prefix, config):
+
+        # get all the contiguous points
+        contig_pts = regions_contig[0].points_set(config.grid_spacing)
+        for Contig in regions_contig[1:]:
+            contig_pts = np.vstack((contig_pts, Contig.points_set(config.grid_spacing)))
+        contig_pts = get_unique_rows(contig_pts)
+
+        logger.info("\nSaving the contiguous-pocket seed points as a PDB file")
+
+        points_filename = output_prefix + "contiguous_pocket_seed_points.pdb"
+
+        if config.compress_output:
+            afile = gzopenfile(points_filename + ".gz", "wb")
+        else:
+            afile = openfile(points_filename, "w")
+
+        write_to_file(
+            afile,
+            numpy_to_pdb(contig_pts, "X"),
+            encode=config.compress_output,
+        )
+        afile.close()
+
+        logger.info(
+            "Contiguous-pocket seed points saved to "
+            + points_filename
+            + " to permit visualization"
+        )
+
+    def compute_volume(self, path_pdb, pts, regions_contig, output_prefix, config):
+        # load the PDB frames
+        index_and_pdbs = self.load_multi_frame_pdb(path_pdb, config)
+
+        # calculate all the volumes
+        logger.info("Calculating the pocket volume of each frame")
+        tmp = MultiThreading(
+            [
+                (index, pdb_object, pts, regions_contig, output_prefix, config)
+                for index, pdb_object in index_and_pdbs
+            ],
+            config.num_processors,
+            MultithreadingCalcVolumeTask,
+        )
+
+        # delete the temp swap directory if necessary
+        if config.use_disk_not_memory:
+            if os.path.exists("./.povme_tmp"):
+                shutil.rmtree("./.povme_tmp")
+        logger.info("Execution time = " + str(time.time() - self.t_start) + " sec")
+        return tmp.results
+
+    @staticmethod
+    def write_vol_csv(results_vol, output_prefix, config):
+        if config.compress_output:
+            f = gzopenfile(
+                output_prefix + "volumes.csv.gz",
+                "wb",
+            )
+        else:
+            f = openfile(output_prefix + "volumes.csv", "w")
+
+        write_to_file(
+            f,
+            "frame_idx,volume\n",
+            encode=config.compress_output,
+        )
+        for i in sorted(results_vol.keys()):
+            write_to_file(
+                f,
+                str(i) + "," + str(results_vol[i]) + "\n",
+                encode=config.compress_output,
+            )
+        f.close()
+
+    @staticmethod
+    def write_vol_traj(results_vol, output_prefix, config):
+        if config.compress_output:
+            traj_file = gzopenfile(
+                output_prefix + "volume_trajectory.pdb.gz",
+                "wb",
+            )
+        else:
+            traj_file = openfile(
+                output_prefix + "volume_trajectory.pdb",
+                "w",
+            )
+
+        for frame_index in range(1, len(list(results_vol.keys())) + 1):
+            if config.compress_output:
+                frame_file = gzopenfile(
+                    output_prefix + "frame_" + str(frame_index) + ".pdb.gz",
+                    "rb",
+                )
+            else:
+                frame_file = openfile(
+                    output_prefix + "frame_" + str(frame_index) + ".pdb",
+                    "r",
+                )
+
+            traj_file.write(frame_file.read())
+            frame_file.close()
+
+        traj_file.close()
+
+    @staticmethod
+    def write_vol_dens(results, output_prefix, config):
+        unique_points: dict[str, Any] = {}
+
+        overall_min = np.ones(3) * 1e100
+        overall_max = np.ones(3) * -1e100
+
+        for result in results:
+            pts = result[2]["SaveVolumetricDensityMap"]
+
+            if len(pts) > 0:
+                amin = np.min(pts, axis=0)
+                amax = np.max(pts, axis=0)
+
+                overall_min = np.min(np.vstack((overall_min, amin)), axis=0)
+                overall_max = np.max(np.vstack((overall_max, amax)), axis=0)
+
+                for pt in pts:
+                    pt_key = str(pt[0]) + ";" + str(pt[1]) + ";" + str(pt[2])
+                    try:
+                        unique_points[pt_key] = unique_points[pt_key] + 1
+                    except:
+                        unique_points[pt_key] = 1
+        if overall_min[0] == 1e100:
+            logger.info(
+                "ERROR! Cannot save volumetric density file because no volumes present in any frame.",
+            )
+        else:
+            xpts = np.arange(
+                overall_min[0],
+                overall_max[0] + config.grid_spacing,
+                config.grid_spacing,
+            )
+            ypts = np.arange(
+                overall_min[1],
+                overall_max[1] + config.grid_spacing,
+                config.grid_spacing,
+            )
+            zpts = np.arange(
+                overall_min[2],
+                overall_max[2] + config.grid_spacing,
+                config.grid_spacing,
+            )
+
+            all_pts = np.zeros((len(xpts) * len(ypts) * len(zpts), 4))
+
+            i = 0
+            for x in xpts:
+                for y in ypts:
+                    for z in zpts:
+                        key = str(x) + ";" + str(y) + ";" + str(z)
+                        all_pts[i][0] = x
+                        all_pts[i][1] = y
+                        all_pts[i][2] = z
+
+                        try:
+                            all_pts[i][3] = unique_points[key]
+                        except:
+                            pass
+
+                        i = i + 1
+
+            # convert the counts in the fourth column into frequencies
+            all_pts[:, 3] = all_pts[:, 3] / len(results)
+            dx_freq(all_pts, output_prefix, config)  # save the dx file
+
+    def run(
+        self,
+        path_pdb: str,
+        output_prefix: str | None = None,
+    ) -> dict[str, Any]:
         """Start POVME
 
-        Arguments:
-        argv -- A list of the command-line arguments.
-
+        Args:
+            path_pdb: Path to PDB file. This will overwrite the configuration file.
+            output_prefix: Path to output directory including directories.
         """
+        self.t_start = time.time()
+        config = self.config
+        config.log()
 
-        # Make sure running Python3
-        if sys.version_info[0] < 3:
-            raise Exception("Please use Python 3 to run this version of POVME.")
-
-        if sys.version_info[1] < 6:
-            print(
-                "WARNING: POVME2 may fail on Python 3.5 or older. Try a newer Python if you get an error.\n"
+        if output_prefix is None:
+            output_prefix = (
+                "POVME_output."
+                + time.strftime("%m-%d-%y")
+                + "."
+                + time.strftime("%H-%M-%S")
+                + "/"
             )
-
-        start_time = time.time()
-
-        # First, check if running in test mode.
-        testing_mode = False
-        if "--test" in sys.argv:
-            setup_testing_dir(
-                [
-                    "/examples/POVME_example/" + f
-                    for f in ["4NSS.pdb", "sample_POVME_input.ini"]
-                ]
-            )
-
-            # Keep track that running in testing mode.
-            testing_mode = True
-
-            # Change the argv list to run the copied ini file.
-            sys.argv[1] = "sample_POVME_input.ini"
-
-        # Load the configuration file
-        if len(argv) == 1:
-            print("\nPOVME " + __version__)
-            print(
-                "\nPlease specify the input file from the command line!\n\nExample: python POVME.py input_file.ini"
-            )
-            self.reference({})
-            print("")
-            sys.exit()
-
-        config = ConfigFile(argv[1])
-
-        # Process the config file
-        parameters = {}
-
-        parameters["GridSpacing"] = 1.0  # default
-        parameters["PointsIncludeRegions"] = []
-        parameters["PointsExcludeRegions"] = []
-        parameters["SavePoints"] = False  # default
-        parameters["LoadPointsFilename"] = ""  # default
-        parameters["PDBFileName"] = ""  # default
-        # default is VDW radius of hydrogen
-        parameters["DistanceCutoff"] = 1.09
-        parameters["ConvexHullExclusion"] = True
-        parameters["ContiguousPocketSeedRegions"] = []
-        parameters["ContiguousPointsCriteria"] = 4
-        parameters["NumProcessors"] = 4
-        parameters["UseDiskNotMemory"] = False
-        parameters["OutputFilenamePrefix"] = (
-            "POVME_output."
-            + time.strftime("%m-%d-%y")
-            + "."
-            + time.strftime("%H-%M-%S")
-            + "/"
-        )
-        parameters["SaveIndividualPocketVolumes"] = False
-        parameters["SavePocketVolumesTrajectory"] = False
-        parameters["OutputEqualNumPointsPerFrame"] = False
-        parameters["SaveTabbedVolumeFile"] = False
-        parameters["SaveVolumetricDensityMap"] = False
-        parameters["CompressOutput"] = False
-        # This is a parameter for debugging purposes only.
-        parameters["NumFrames"] = -1
-
-        float_parameters = ["GridSpacing", "DistanceCutoff"]
-        boolean_parameters = [
-            "SavePoints",
-            "ConvexHullExclusion",
-            "CompressOutput",
-            "UseDiskNotMemory",
-            "SaveVolumetricDensityMap",
-            "OutputEqualNumPointsPerFrame",
-            "SaveIndividualPocketVolumes",
-            "SaveTabbedVolumeFile",
-            "SavePocketVolumesTrajectory",
-        ]
-        int_parameters = ["NumFrames", "ContiguousPointsCriteria", "NumProcessors"]
-        filename_parameters = [
-            "OutputFilenamePrefix",
-            "PDBFileName",
-            "LoadPointsFilename",
-        ]
-
-        for entity in config.entities:
-            try:
-                index = [p.upper() for p in float_parameters].index(entity[0])
-                parameters[float_parameters[index]] = float(entity[1])
-            except:
-                pass
-
-            try:
-                index = [p.upper() for p in boolean_parameters].index(entity[0])
-
-                if entity[1].upper() in ["YES", "TRUE"]:
-                    parameters[boolean_parameters[index]] = True
-                else:
-                    parameters[boolean_parameters[index]] = False
-            except:
-                pass
-
-            try:
-                index = [p.upper() for p in int_parameters].index(entity[0])
-                parameters[int_parameters[index]] = int(entity[1])
-            except:
-                pass
-
-            try:
-                index = [p.upper() for p in filename_parameters].index(entity[0])
-                parameters[filename_parameters[index]] = fix_filename(
-                    entity[1].strip(), False
-                ).as_posix()  # so a string
-            except:
-                pass
-
-            # Regions are handled separately for each parameter...
-            if entity[0] == "POINTSINCLUSIONSPHERE":
-                Include = Region()
-                items = entity[1].split(" ")
-                Include.center[0] = float(items[0])
-                Include.center[1] = float(items[1])
-                Include.center[2] = float(items[2])
-                Include.radius = float(items[3])
-                Include.region_type = "SPHERE"
-                parameters["PointsIncludeRegions"].append(Include)
-            elif entity[0] == "POINTSINCLUSIONBOX":
-                Include = Region()
-                items = entity[1].split(" ")
-                Include.center[0] = float(items[0])
-                Include.center[1] = float(items[1])
-                Include.center[2] = float(items[2])
-                Include.box_dimen[0] = float(items[3])
-                Include.box_dimen[1] = float(items[4])
-                Include.box_dimen[2] = float(items[5])
-                Include.region_type = "BOX"
-                parameters["PointsIncludeRegions"].append(Include)
-            if entity[0] == "CONTIGUOUSPOCKETSEEDSPHERE":
-                Contig = Region()
-                items = entity[1].split(" ")
-                Contig.center[0] = float(items[0])
-                Contig.center[1] = float(items[1])
-                Contig.center[2] = float(items[2])
-                Contig.radius = float(items[3])
-                Contig.region_type = "SPHERE"
-                parameters["ContiguousPocketSeedRegions"].append(Contig)
-            elif entity[0] == "CONTIGUOUSPOCKETSEEDBOX":
-                Contig = Region()
-                items = entity[1].split(" ")
-                Contig.center[0] = float(items[0])
-                Contig.center[1] = float(items[1])
-                Contig.center[2] = float(items[2])
-                Contig.box_dimen[0] = float(items[3])
-                Contig.box_dimen[1] = float(items[4])
-                Contig.box_dimen[2] = float(items[5])
-                Contig.region_type = "BOX"
-                parameters["ContiguousPocketSeedRegions"].append(Contig)
-            elif entity[0] == "POINTSEXCLUSIONSPHERE":
-                Exclude = Region()
-                items = entity[1].split(" ")
-                Exclude.center[0] = float(items[0])
-                Exclude.center[1] = float(items[1])
-                Exclude.center[2] = float(items[2])
-                Exclude.radius = float(items[3])
-                Exclude.region_type = "SPHERE"
-                parameters["PointsExcludeRegions"].append(Exclude)
-            elif entity[0] == "POINTSEXCLUSIONBOX":
-                Exclude = Region()
-                items = entity[1].split(" ")
-                Exclude.center[0] = float(items[0])
-                Exclude.center[1] = float(items[1])
-                Exclude.center[2] = float(items[2])
-                Exclude.box_dimen[0] = float(items[3])
-                Exclude.box_dimen[1] = float(items[4])
-                Exclude.box_dimen[2] = float(items[5])
-                Exclude.region_type = "BOX"
-                parameters["PointsExcludeRegions"].append(Exclude)
-
-        # If there are no ContiguousPocketSeedRegions, don't print out the
-        # ContiguousPointsCriteria parameter.
-        if len(parameters["ContiguousPocketSeedRegions"]) == 0:
-            del parameters["ContiguousPointsCriteria"]
 
         # If the output prefix includes a directory, create that directory if
         # necessary
-        if "/" in parameters["OutputFilenamePrefix"]:
-            output_dirname = os.path.dirname(parameters["OutputFilenamePrefix"])
-            # if os.path.exists(output_dirname): shutil.rmtree(output_dirname) # So delete the directory if it already exists.
-            try:
-                os.mkdir(output_dirname)
-            except:
-                pass
-
-        # print out the header
-        self.reference(parameters, "")
-        log("", parameters)
+        if "/" in output_prefix:
+            output_dirname = os.path.dirname(output_prefix)
+            os.makedirs(output_dirname, exist_ok=True)
 
         # create temp swap directory if needed
-        if parameters["UseDiskNotMemory"] == True:
+        if config.use_disk_not_memory:
             if os.path.exists("./.povme_tmp"):
                 shutil.rmtree("./.povme_tmp")
             os.mkdir("./.povme_tmp")
 
-        # print out parameters
-        log("Parameters:", parameters)
-        for i in list(parameters.keys()):
-
-            if i == "NumFrames" and parameters["NumFrames"] == -1:
-                # So only show this parameter if it's value is not the
-                # default.
-                continue
-
-            if type(parameters[i]) is list:
-                for i2 in parameters[i]:
-                    if i2 != "":
-                        log("\t" + str(i) + ": " + str(i2), parameters)
-            else:
-                if parameters[i] != "":
-                    log("\t" + str(i) + ": " + str(parameters[i]), parameters)
-
+        # User specified regions to include in the PDB structure.
+        # Thus, we compute these points.
         pts = None
-        if len(parameters["PointsIncludeRegions"]) > 0:  # so create the point file
-
-            log("\nGenerating the pocket-encompassing point field", parameters)
-
-            # get all the points of the inclusion regions
-            pts = parameters["PointsIncludeRegions"][0].points_set(
-                parameters["GridSpacing"]
-            )
-            for Included in parameters["PointsIncludeRegions"][1:]:
-                pts = numpy.vstack(
-                    (pts, Included.points_set(parameters["GridSpacing"]))
+        if config.load_points_path is not None:
+            if not os.path.exists(config.load_points_path):
+                logger.error(
+                    f"points file at {config.load_points_path} does not exist!"
                 )
-            pts = unique_rows(pts)
+            pts = np.load(config.load_points_path)
+        elif (len(config.points_inclusion_box) > 0) or (
+            len(config.points_inclusion_sphere) > 0
+        ):
+            pts = self.gen_points(config)
+            if config.save_points:
+                self.write_points(pts, output_prefix, config)
+        if pts is None:
+            logger.error("No points are specified!")
+            logger.error("Please specify inclusions or load points from a NumPy file.")
+            sys.exit(0)
 
-            # get all the points of the exclusion regions
-            if len(parameters["PointsExcludeRegions"]) > 0:
-                pts_exclusion = parameters["PointsExcludeRegions"][0].points_set(
-                    parameters["GridSpacing"]
-                )
-                for Excluded in parameters["PointsExcludeRegions"][1:]:
-                    pts_exclusion = numpy.vstack(
-                        (pts_exclusion, Excluded.points_set(parameters["GridSpacing"]))
-                    )
-                pts_exclusion = unique_rows(pts_exclusion)
+        # Handle contig TODO:
+        regions_contig = self._get_regions_contig(config)
+        if len(regions_contig) > 0:
+            self.write_points_contig(regions_contig, output_prefix, config)
 
-                # remove the exclusion points from the inclusion points I
-                # think there ought to be a set-based way of doing this, but
-                # I'm going to go for the pairwise comparison. consider
-                # rewriting later
-                index_to_remove = numpy.nonzero(cdist(pts, pts_exclusion) < 1e-7)[0]
-                pts = numpy.delete(pts, index_to_remove, axis=0)
+        # Compute volumes of frames in PDB file.
+        if not os.path.exists(path_pdb):
+            logger.error(f"PDB file {path_pdb} does not exits!")
+            sys.exit(0)
+        results = self.compute_volume(
+            path_pdb, pts, regions_contig, output_prefix, config
+        )
+        results_vol = {}
+        for result in results:
+            results_vol[result[0]] = result[1]
 
-            # save the points as PDB
-            if parameters["SavePoints"] == True:
+        # Save volumes to CSV file
+        self.write_vol_csv(results_vol, output_prefix, config)
 
-                # First, save the point field itself
+        # if the user wanted a single trajectory containing all the
+        # volumes, generate that here.
+        if config.save_pocket_volumes_trajectory:
+            self.write_vol_traj(results_vol, output_prefix, config)
 
-                log("\nSaving the point field as a PDB and NPY file", parameters)
+        # if the user requested a volumetric density map, then generate it here
+        if config.save_volumetric_density_map:
+            self.write_vol_dens(results, output_prefix, config)
 
-                points_filename = parameters["OutputFilenamePrefix"] + "point_field.pdb"
-
-                if parameters["CompressOutput"] == True:
-                    afile = gzopenfile(points_filename + ".gz", "wb")
-                else:
-                    afile = openfile(points_filename, "w")
-
-                write_to_file(
-                    afile, numpy_to_pdb(pts, "X"), encode=parameters["CompressOutput"]
-                )
-                afile.close()
-
-                # save the points as npy
-
-                numpy.save(points_filename + ".npy", pts)
-
-                log(
-                    "\tPoint field saved to "
-                    + points_filename
-                    + " to permit visualization",
-                    parameters,
-                )
-                log(
-                    "\tPoint field saved to "
-                    + points_filename
-                    + ".npy to optionally load for the volume calculation",
-                    parameters,
-                )
-                log("", parameters)
-
-                # Now, save the contiguous seed points as well, if specified.
-                if len(parameters["ContiguousPocketSeedRegions"]) > 0:
-                    # get all the contiguous points
-                    contig_pts = parameters["ContiguousPocketSeedRegions"][
-                        0
-                    ].points_set(parameters["GridSpacing"])
-                    for Contig in parameters["ContiguousPocketSeedRegions"][1:]:
-                        contig_pts = numpy.vstack(
-                            (contig_pts, Contig.points_set(parameters["GridSpacing"]))
-                        )
-                    contig_pts = unique_rows(contig_pts)
-
-                    log(
-                        "\nSaving the contiguous-pocket seed points as a PDB file",
-                        parameters,
-                    )
-
-                    points_filename = (
-                        parameters["OutputFilenamePrefix"]
-                        + "contiguous_pocket_seed_points.pdb"
-                    )
-
-                    if parameters["CompressOutput"] == True:
-                        afile = gzopenfile(points_filename + ".gz", "wb")
-                    else:
-                        afile = openfile(points_filename, "w")
-
-                    write_to_file(
-                        afile,
-                        numpy_to_pdb(contig_pts, "X"),
-                        encode=parameters["CompressOutput"],
-                    )
-                    afile.close()
-
-                    log(
-                        "\tContiguous-pocket seed points saved to "
-                        + points_filename
-                        + " to permit visualization",
-                        parameters,
-                    )
-                    log("", parameters)
-
-        # so there's a PDB point specified for calculating the volume.
-        if parameters["PDBFileName"] != "":
-
-            # load the points in they aren't already present
-            if pts is None:
-                log("\nLoading the point-field NPY file...", parameters)
-                parameters["pts_orig"] = numpy.load(parameters["LoadPointsFilename"])
-            else:
-                parameters["pts_orig"] = pts
-
-            # load the PDB frames
-            index_and_pdbs = self.load_multi_frame_pdb(
-                parameters["PDBFileName"], parameters
-            )
-
-            # calculate all the volumes
-            log("", parameters)
-            log("Calculating the pocket volume of each frame", parameters)
-            tmp = Multithreading(
-                [
-                    (index, pdb_object, parameters)
-                    for index, pdb_object in index_and_pdbs
-                ],
-                parameters["NumProcessors"],
-                MultithreadingCalcVolumeTask,
-            )
-
-            # delete the temp swap directory if necessary
-            if parameters["UseDiskNotMemory"] == True:
-                if os.path.exists("./.povme_tmp"):
-                    shutil.rmtree("./.povme_tmp")
-
-            # display the results
-            results_dic = {}
-            for result in tmp.results:
-                results_dic[result[0]] = result[1]
-            log("", parameters)
-            log("FRAME        | VOLUME (A^3)", parameters)
-            log("-------------+-------------", parameters)
-            for i in sorted(results_dic.keys()):
-                log(str(i).ljust(13) + "| " + str(results_dic[i]), parameters)
-
-            log("", parameters)
-            log(
-                "Execution time = " + str(time.time() - start_time) + " sec", parameters
-            )
-            log("", parameters)
-
-            # if the user requested a separate volume file, save that as well
-            if parameters["SaveTabbedVolumeFile"] == True:
-                if parameters["CompressOutput"] == True:
-                    f = gzopenfile(
-                        parameters["OutputFilenamePrefix"] + "volumes.tabbed.txt.gz",
-                        "wb",
-                    )
-
-                else:
-                    f = openfile(
-                        parameters["OutputFilenamePrefix"] + "volumes.tabbed.txt", "w"
-                    )
-                for i in sorted(results_dic.keys()):
-                    write_to_file(
-                        f,
-                        str(i) + "\t" + str(results_dic[i]) + "\n",
-                        encode=parameters["CompressOutput"],
-                    )
-
-                f.close()
-
-            # if the user wanted a single trajectory containing all the
-            # volumes, generate that here.
-            if parameters["SavePocketVolumesTrajectory"] == True:
-                if parameters["CompressOutput"] == True:
-                    traj_file = gzopenfile(
-                        parameters["OutputFilenamePrefix"] + "volume_trajectory.pdb.gz",
-                        "wb",
-                    )
-                else:
-                    traj_file = openfile(
-                        parameters["OutputFilenamePrefix"] + "volume_trajectory.pdb",
-                        "w",
-                    )
-
-                for frame_index in range(1, len(list(results_dic.keys())) + 1):
-                    if parameters["CompressOutput"] == True:
-                        frame_file = gzopenfile(
-                            parameters["OutputFilenamePrefix"]
-                            + "frame_"
-                            + str(frame_index)
-                            + ".pdb.gz",
-                            "rb",
-                        )
-                    else:
-                        frame_file = openfile(
-                            parameters["OutputFilenamePrefix"]
-                            + "frame_"
-                            + str(frame_index)
-                            + ".pdb",
-                            "r",
-                        )
-
-                    traj_file.write(frame_file.read())
-                    frame_file.close()
-
-                traj_file.close()
-
-            # if the user requested a volumetric density map, then generate it
-            # here
-            if parameters["SaveVolumetricDensityMap"] == True:
-                unique_points = {}
-
-                overall_min = numpy.ones(3) * 1e100
-                overall_max = numpy.ones(3) * -1e100
-
-                for result in tmp.results:
-                    pts = result[2]["SaveVolumetricDensityMap"]
-
-                    if len(pts) > 0:
-                        amin = numpy.min(pts, axis=0)
-                        amax = numpy.max(pts, axis=0)
-
-                        overall_min = numpy.min(
-                            numpy.vstack((overall_min, amin)), axis=0
-                        )
-                        overall_max = numpy.max(
-                            numpy.vstack((overall_max, amax)), axis=0
-                        )
-
-                        for pt in pts:
-                            pt_key = str(pt[0]) + ";" + str(pt[1]) + ";" + str(pt[2])
-                            try:
-                                unique_points[pt_key] = unique_points[pt_key] + 1
-                            except:
-                                unique_points[pt_key] = 1
-                if overall_min[0] == 1e100:
-                    log(
-                        "ERROR! Cannont save volumetric density file because no volumes present in any frame.",
-                        parameters,
-                    )
-                else:
-                    xpts = numpy.arange(
-                        overall_min[0],
-                        overall_max[0] + parameters["GridSpacing"],
-                        parameters["GridSpacing"],
-                    )
-                    ypts = numpy.arange(
-                        overall_min[1],
-                        overall_max[1] + parameters["GridSpacing"],
-                        parameters["GridSpacing"],
-                    )
-                    zpts = numpy.arange(
-                        overall_min[2],
-                        overall_max[2] + parameters["GridSpacing"],
-                        parameters["GridSpacing"],
-                    )
-
-                    all_pts = numpy.zeros((len(xpts) * len(ypts) * len(zpts), 4))
-
-                    i = 0
-                    for x in xpts:
-                        for y in ypts:
-                            for z in zpts:
-                                key = str(x) + ";" + str(y) + ";" + str(z)
-                                all_pts[i][0] = x
-                                all_pts[i][1] = y
-                                all_pts[i][2] = z
-
-                                try:
-                                    all_pts[i][3] = unique_points[key]
-                                except:
-                                    pass
-
-                                i = i + 1
-
-                    # convert the counts in the fourth column into frequencies
-                    all_pts[:, 3] = all_pts[:, 3] / len(tmp.results)
-                    dx_freq(all_pts, parameters)  # save the dx file
-
-                    # print "To turn into a DX file:"
-                    # print all_pts
-                    # import cPickle as pickle
-                    # pickle.dump(all_pts, open('dill.pickle', 'w'))
-
-        # If running in testing mode, make sure things look alright.
-        if testing_mode:
-            import glob
-
-            expected_vols = set([1673.0, 1493.0, 1711.0, 1854.0, 2023.0])
-            actual_vols = set(results_dic.values())
-            if len(actual_vols - expected_vols) > 0:
-                raise Exception(
-                    "Expected volumes to be "
-                    + str(expected_vols)
-                    + ", but got "
-                    + str(actual_vols)
-                )
-            num_output_files = len(glob.glob("POVME_test_run/*"))
-            if num_output_files != 12:
-                raise Exception(
-                    "Expected 12 output files, but got " + str(num_output_files)
-                )
-
-            # Remove testing directory.
-            delete_testing_dir()
-
-            test_passed()
+        return results_vol
