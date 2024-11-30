@@ -1,0 +1,13 @@
+pocket_detection_resolution: 4.0
+
+pocket_measuring_resolution: 1.0
+
+clashing_cutoff: 3.0
+
+n_neighbors: 4
+
+n_spheres: 5
+
+sphere_padding: 5.0
+
+n_cores: 4
