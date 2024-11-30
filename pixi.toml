@@ -1,14 +1,15 @@
 [project]
 authors = ["Jacob Durrant <durrantj@pitt.edu>"]
 channels = ["conda-forge"]
-description = "Add a short description here"
+description = "Detect and characterize pockets from molecular simulations"
 name = "povme"
-platforms = ["win-64", "linux-64", "osx-64"]
+platforms = ["linux-64"]
 version = "2.2.1"
 readme = "README.md"
 
 [pypi-dependencies]
 povme = { path = ".", editable = true }
+ray = ">=2.39.0, <3"
 
 [system-requirements]
 linux = "3.10.0"
