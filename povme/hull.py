@@ -5,9 +5,9 @@ from functools import reduce
 import numpy as np
 import numpy.typing as npt
 from loguru import logger
+from pymolecule import Molecule
 from scipy.spatial.distance import cdist, pdist, squareform
 
-from . import pymolecule
 from .io import gzopenfile, numpy_to_pdb, openfile, write_to_file
 from .parallel import MultithreadingTaskGeneral
 
@@ -394,8 +394,8 @@ class MultithreadingCalcVolumeTask(MultithreadingTaskGeneral):
         # you may need to load it from disk if the user so specified
         if config.use_disk_not_memory:  # so you need to load it from disk
             pym_filename = pdb
-            pdb = pymolecule.Molecule()
-            pdb.fileio.load_pym_into(pym_filename)
+            pdb = Molecule()
+            pdb.io.load_pym_into(pym_filename)
 
         # remove the points that are far from the points region anyway
         min_pts = np.min(pts, 0) - config.distance_cutoff - 1

@@ -31,13 +31,16 @@ def path_rel1_config():
 def path_rel1_output():
     return os.path.join(TEST_DIR, "tmp/", "rel1/")
 
+
 @pytest.fixture
 def path_rogfp2_pdb():
     return os.path.join(TEST_DIR, "files/rogfp2/rogfp2.pdb")
 
+
 @pytest.fixture
 def path_rogfp2_config():
     return os.path.join(TEST_DIR, "files/rogfp2/pocket-id.yml")
+
 
 @pytest.fixture
 def path_rogfp2_output():
