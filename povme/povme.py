@@ -12,7 +12,7 @@ from pymolecule import Molecule
 from scipy.spatial.distance import cdist
 
 from .config import POVMEConfig
-from .hull import MultiprocessingCalcVolumeTask
+from .points.hull import MultiprocessingCalcVolumeTask
 from .io import dx_freq, gzopenfile, numpy_to_pdb, openfile, write_to_file
 from .parallel import MultiprocessingManager, MultiprocessingTaskGeneral
 from .points.regions import collect_regions

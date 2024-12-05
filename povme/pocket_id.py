@@ -7,7 +7,7 @@ from scipy.cluster.vq import kmeans2
 from scipy.spatial.distance import cdist
 
 from .config import PocketIDConfig
-from .hull import ConvexHull
+from .points.hull import ConvexHull
 from .io import openfile, write_pdbs
 from .points import GridMesh
 

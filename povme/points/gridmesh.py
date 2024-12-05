@@ -13,7 +13,7 @@ from ..parallel import MultiprocessingManager, MultiprocessingTaskGeneral
 class MultiprocessingRemovePointsOutsideHullTask(MultiprocessingTaskGeneral):
     """A class to remove points outside a convex hull using multiple processors."""
 
-    def value_func(self, item: tuple[Any, np.ndarray]) -> np.ndarray:
+    def value_func(self, item: tuple[Any, npt.NDArray[np.float64]]) -> npt.NDArray[np.float64]:
         """Removes points outside the convex hull.
 
         Args:
@@ -36,7 +36,7 @@ class MultiprocessingRemovePointsOutsideHullTask(MultiprocessingTaskGeneral):
 class MultiprocessingGetClosePointsTask(MultiprocessingTaskGeneral):
     """A class to identify box points that are near other, user-specified points."""
 
-    def value_func(self, item: tuple[spatial.KDTree, float, np.ndarray]) -> np.ndarray:
+    def value_func(self, item: tuple[spatial.KDTree, float, npt.NDArray[np.float64]]) -> npt.NDArray[np.float64]:
         """Identifies indices of box points close to other points.
 
         Args:
@@ -73,36 +73,36 @@ class MultiprocessingGetClosePointsTask(MultiprocessingTaskGeneral):
 class GridMesh:
     """A class representing a box of equidistant points."""
 
-    def __init__(self, box: npt.NDArray[np.float64], reso: int) -> None:
+    def __init__(self, box: npt.NDArray[np.float64], res: float) -> None:
         """Initialize the class.
 
         Args:
             box: A numpy array representing two 3D points, (min_x, min_y,
                 min_z) and (max_x, max_y, max_z), that define a box.
-            reso: The space between the points of the box, in the X, Y, and
+            res: The space between the points of the box, in the X, Y, and
                 Z direction.
         """
 
         self.write_pdbs = write_pdbs()
 
-        min_x = self.__snap_float(box[0][0], reso)
-        min_y = self.__snap_float(box[0][1], reso)
-        min_z = self.__snap_float(box[0][2], reso)
-        max_x = self.__snap_float(box[1][0], reso) + 1.1 * reso
-        max_y = self.__snap_float(box[1][1], reso) + 1.1 * reso
-        max_z = self.__snap_float(box[1][2], reso) + 1.1 * reso
+        min_x = self.__snap_float(box[0][0], res)
+        min_y = self.__snap_float(box[0][1], res)
+        min_z = self.__snap_float(box[0][2], res)
+        max_x = self.__snap_float(box[1][0], res) + 1.1 * res
+        max_y = self.__snap_float(box[1][1], res) + 1.1 * res
+        max_z = self.__snap_float(box[1][2], res) + 1.1 * res
 
-        x, y, z = np.mgrid[min_x:max_x:reso, min_y:max_y:reso, min_z:max_z:reso]
+        x, y, z = np.mgrid[min_x:max_x:res, min_y:max_y:res, min_z:max_z:res] # type: ignore
         self.points = np.array(list(zip(x.ravel(), y.ravel(), z.ravel())))
 
     def __snap_float(
-        self, val: npt.NDArray[np.float64], reso: int
+        self, val: npt.NDArray[np.float64], res: float
     ) -> npt.NDArray[np.float64]:
         """Snaps an arbitrary point to the nearest grid point.
 
         Args:
             val: A numpy array corresponding to a 3D point.
-            reso: The resolution (distance in the X, Y, and Z directions
+            res: The resolution (distance in the X, Y, and Z directions
                 between adjacent points) of the grid.
 
         Returns:
@@ -110,7 +110,7 @@ class GridMesh:
                 nearby grid point.
         """
 
-        return np.floor(val / reso) * reso
+        return np.floor(val / res) * res
 
     def remove_points_outside_convex_hull(self, hull, config):
         """Removes box points that are outside a convex hull.
@@ -220,7 +220,7 @@ class GridMesh:
         Args:
             num_pts: An int, the number of points to place on each side of
                 the existing points, in the X, Y, and Z directions.
-            reso: The distance between adjacent added points.
+            res: The distance between adjacent added points.
 
         """
 
@@ -261,7 +261,7 @@ class GridMesh:
         such points exist.
 
         Args:
-            reso: The distance between adjacent points.
+            res: The distance between adjacent points.
             number_of_neighbors: The minimum number of permissible neighbors.
 
         """

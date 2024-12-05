@@ -8,8 +8,8 @@ from loguru import logger
 from pymolecule import Molecule
 from scipy.spatial.distance import cdist, pdist, squareform
 
-from .io import gzopenfile, numpy_to_pdb, openfile, write_to_file
-from .parallel import MultiprocessingTaskGeneral
+from ..io import gzopenfile, numpy_to_pdb, openfile, write_to_file
+from ..parallel import MultiprocessingTaskGeneral
 
 
 def unique_rows(a):
