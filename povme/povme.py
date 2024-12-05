@@ -12,9 +12,9 @@ from pymolecule import Molecule
 from scipy.spatial.distance import cdist
 
 from .config import POVMEConfig
-from .hull import MultithreadingCalcVolumeTask
+from .hull import MultiprocessingCalcVolumeTask
 from .io import dx_freq, gzopenfile, numpy_to_pdb, openfile, write_to_file
-from .parallel import MultiThreading, MultithreadingTaskGeneral
+from .parallel import MultiprocessingManager, MultiprocessingTaskGeneral
 from .points.regions import collect_regions
 
 
@@ -34,7 +34,7 @@ def get_unique_rows(a):
     return np.unique(b).view(a.dtype).reshape(-1, a.shape[1])  # unique_a
 
 
-class MultithreadingStringToMoleculeTask(MultithreadingTaskGeneral):
+class MultithreadingStringToMoleculeTask(MultiprocessingTaskGeneral):
     """A class for loading PDB frames (as strings) into pymolecule.Molecule
     objects."""
 
@@ -128,7 +128,7 @@ class POVME:
             pdb_strings.remove("")
 
         # now convert each pdb string into a pymolecule.Molecule object
-        molecules = MultiThreading(
+        molecules = MultiprocessingManager(
             [(pdb_strings[idx], idx + 1, config) for idx in range(len(pdb_strings))],
             config.num_processors,
             MultithreadingStringToMoleculeTask,
@@ -232,13 +232,13 @@ class POVME:
 
         # calculate all the volumes
         logger.info("Calculating the pocket volume of each frame")
-        tmp = MultiThreading(
+        tmp = MultiprocessingManager(
             [
                 (index, pdb_object, pts, regions_contig, output_prefix, config)
                 for index, pdb_object in index_and_pdbs
             ],
             config.num_processors,
-            MultithreadingCalcVolumeTask,
+            MultiprocessingCalcVolumeTask,
         )
 
         # delete the temp swap directory if necessary

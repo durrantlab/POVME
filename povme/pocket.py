@@ -3,7 +3,7 @@ import numpy.typing as npt
 from scipy import spatial
 
 from .io import write_pdbs
-from .parallel import GeneralTask, MultiThreading
+from .parallel import GeneralTask, MultiprocessingManager
 
 
 class BoxOfPoints:
@@ -55,7 +55,7 @@ class BoxOfPoints:
             hull: The convex hull.
         """
         chunks = [(hull, t) for t in np.array_split(self.points, config.n_cores)]
-        tmp = MultiThreading(chunks, config.n_cores, self.__MultiIdHullPts)
+        tmp = MultiprocessingManager(chunks, config.n_cores, self.__MultiIdHullPts)
         self.points = np.vstack(tmp.results)
 
     class __MultiIdHullPts(GeneralTask):
@@ -101,7 +101,7 @@ class BoxOfPoints:
             (box_of_pts_distance_tree, dist_cutoff, t)
             for t in np.array_split(other_points, config.n_cores)
         ]
-        tmp = MultiThreading(chunks, config.n_cores, self.__MultiGetClosePoints)
+        tmp = MultiprocessingManager(chunks, config.n_cores, self.__MultiGetClosePoints)
         indices_of_box_pts_close_to_molecule_points = np.unique(np.hstack(tmp.results))
 
         self.points = np.delete(
