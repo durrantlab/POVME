@@ -138,7 +138,7 @@ class POVME:
         # now convert each pdb string into a pymolecule.Molecule object
         manager = MultiprocessingManager(
             [(pdb_strings[idx], idx + 1, config) for idx in range(len(pdb_strings))],
-            config.num_processors,
+            config.n_cores,
             MultiprocessingStringToMoleculeTask,
         )
         molecules = manager.results
@@ -245,7 +245,7 @@ class POVME:
                 (index, pdb_object, pts, regions_contig, output_prefix, config)
                 for index, pdb_object in index_and_pdbs
             ],
-            config.num_processors,
+            config.n_cores,
             MultiprocessingCalcVolumeTask,
         )
 

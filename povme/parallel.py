@@ -32,36 +32,41 @@ def worker(item: Any) -> Any:
 class MultiprocessingManager:
     """A class for running calculations on multiple processors."""
 
-    def __init__(self, inputs, num_processors, task_class):
+    def __init__(self, inputs, n_cores, task_class):
         """
         Launches a calculation on multiple processors.
 
         Args:
             inputs: A list containing all the input required for the calculation.
-            num_processors: The number of processors to use. If <=0, uses all available.
+            n_cores: The number of processors to use. If <=0, uses all available.
             task_class: A class with a method to process inputs.
         """
         self.results = []
 
-        if platform.system().upper().startswith("WIN"):
+        # Handle Windows multiprocessing requirements
+        if (
+            multiprocessing.current_process().name == "MainProcess"
+            and platform.system().upper().startswith("WIN")
+        ):
             multiprocessing.freeze_support()
 
-        if num_processors != 1 and platform.system().upper().startswith("WIN"):
+        # Adjust number of processors based on platform limitations
+        if n_cores != 1 and platform.system().upper().startswith("WIN"):
             print(
                 "WARNING: Use of multiple processors is not fully supported on Windows. Proceeding with one processor..."
             )
-            num_processors = 1
+            n_cores = 1
 
-        if num_processors == 1:
+        if n_cores == 1:
             # Single processor execution
             task_instance = task_class()
             self.results = [task_instance.runit(item) for item in inputs]
         else:
             # Multiple processors execution
-            if num_processors <= 0:
-                num_processors = multiprocessing.cpu_count()
+            if n_cores <= 0:
+                n_cores = multiprocessing.cpu_count()
 
-            num_processors = min(num_processors, len(inputs)) if len(inputs) > 0 else 1
+            n_cores = min(n_cores, len(inputs)) if len(inputs) > 0 else 1
 
             if len(inputs) == 0:
                 self.results = []
@@ -69,9 +74,7 @@ class MultiprocessingManager:
 
             try:
                 with multiprocessing.Pool(
-                    processes=num_processors,
-                    initializer=init_worker,
-                    initargs=(task_class,),
+                    processes=n_cores, initializer=init_worker, initargs=(task_class,)
                 ) as pool:
                     self.results = pool.map(worker, inputs)
             except KeyboardInterrupt:

@@ -1,9 +1,73 @@
+from typing import Any
+
 import numpy as np
 import numpy.typing as npt
+from loguru import logger
 from scipy import spatial
 
+from .config import POVMEConfig
 from .io import write_pdbs
-from .parallel import GeneralTask, MultiprocessingManager
+from .parallel import MultiprocessingManager, MultiprocessingTaskGeneral
+
+
+class MultiprocessingRemovePointsOutsideHullTask(MultiprocessingTaskGeneral):
+    """A class to remove points outside a convex hull using multiple processors."""
+
+    def value_func(self, item: tuple[Any, np.ndarray]) -> np.ndarray:
+        """Removes points outside the convex hull.
+
+        Args:
+            item: A tuple containing:
+                - hull: The convex hull object.
+                - some_points: A numpy array of points to be tested.
+
+        Returns:
+            A numpy array of points that are inside the convex hull.
+        """
+        try:
+            hull, some_points = item
+            new_pts = [pt for pt in some_points if hull.inside_hull(pt)]
+            return np.array(new_pts)
+        except Exception as e:
+            logger.exception(f"Error in Removing Points Outside Hull: {e}")
+            return np.array([])  # Return empty array on error
+
+
+class MultiprocessingGetClosePointsTask(MultiprocessingTaskGeneral):
+    """A class to identify box points that are near other, user-specified points."""
+
+    def value_func(self, item: tuple[spatial.KDTree, float, np.ndarray]) -> np.ndarray:
+        """Identifies indices of box points close to other points.
+
+        Args:
+            item: A tuple containing:
+                - box_of_pts_distance_tree: KDTree of box points.
+                - dist_cutoff: The cutoff distance.
+                - other_points: Numpy array of other points.
+
+        Returns:
+            A numpy array of unique indices of box points that are within dist_cutoff.
+        """
+        try:
+            box_of_pts_distance_tree, dist_cutoff, other_points = item
+
+            # Create KDTree for other_points
+            other_points_distance_tree = spatial.KDTree(other_points)
+
+            # Find all box points within dist_cutoff of any other point
+            sparce_distance_matrix = other_points_distance_tree.sparse_distance_matrix(
+                box_of_pts_distance_tree, dist_cutoff
+            )
+
+            # Extract unique indices of box points that are close to other points
+            indices_of_box_pts_close_to_molecule_points = np.unique(
+                sparce_distance_matrix.tocsr().indices
+            )
+
+            return indices_of_box_pts_close_to_molecule_points
+        except Exception as e:
+            logger.exception(f"Error in Getting Close Points: {e}")
+            return np.array([])  # Return empty array on error
 
 
 class BoxOfPoints:
@@ -53,37 +117,43 @@ class BoxOfPoints:
 
         Args:
             hull: The convex hull.
+            config: Configuration object containing `n_cores`.
         """
+
+        # Prepare input as list of tuples: (hull, some_points)
         chunks = [(hull, t) for t in np.array_split(self.points, config.n_cores)]
-        tmp = MultiprocessingManager(chunks, config.n_cores, self.__MultiIdHullPts)
-        self.points = np.vstack(tmp.results)
 
-    class __MultiIdHullPts(GeneralTask):
-        """A class to remove points outside a convex hull using multiple
-        processors."""
+        # Initialize MultiprocessingManager with the appropriate task class
+        manager = MultiprocessingManager(
+            inputs=chunks,
+            n_cores=config.n_cores,
+            task_class=MultiprocessingRemovePointsOutsideHullTask,
+        )
 
-        def value_func(self, items, results_queue):  # so overwriting this function
-            """The calculations that will run on a single processor to remove
-            points outside a convex hull."""
+        # Collect results and update self.points
+        processed_chunks = manager.results
 
-            hull = items[0]
-            some_points = items[1]
-
-            # Note this would be much faster if it were matrix-based instead of
-            # point-by-point based. Can preallocate numpy array size because I
-            # don't know beforehand how many points will be in the hull
-            new_pts = []
-            for pt in some_points:
-                if hull.inside_hull(pt):
-                    new_pts.append(pt)
-
-            if len(new_pts) == 0:
-                pass  # here save the results for later compilation
+        # Each element in processed_chunks is either a numpy array of new_pts or an error tuple
+        valid_points = []
+        for result in processed_chunks:
+            if isinstance(result, tuple) and result[0] == "error":
+                logger.error(f"Error removing points outside hull: {result[1]}")
             else:
-                self.results.append(np.array(new_pts))
+                if isinstance(result, np.ndarray) and result.size > 0:
+                    valid_points.append(result)
+                elif not isinstance(result, np.ndarray):
+                    logger.warning(f"Unexpected result type: {type(result)}")
+
+        if valid_points:
+            self.points = np.vstack(valid_points)
+        else:
+            self.points = np.array([])
 
     def remove_all_points_close_to_other_points(
-        self, other_points: npt.NDArray[np.float64], dist_cutoff: float, config
+        self,
+        other_points: npt.NDArray[np.float64],
+        dist_cutoff: float,
+        config: POVMEConfig,
     ) -> None:
         """Removes all points in this box that come within the points specified
         in a numpy array
@@ -92,43 +162,43 @@ class BoxOfPoints:
             other_points: A numpy array containing the other points.
             dist_cutoff: A float, the cutoff distance to use in determining
                 whether or not box points will be removed.
-
+            config: Configuration object containing `n_cores`.
         """
 
         # note, in newer versions of scipy use cKDTree
         box_of_pts_distance_tree = spatial.KDTree(self.points)
+
+        # Prepare input as list of tuples: (box_of_pts_distance_tree, dist_cutoff, t)
         chunks = [
             (box_of_pts_distance_tree, dist_cutoff, t)
             for t in np.array_split(other_points, config.n_cores)
         ]
-        tmp = MultiprocessingManager(chunks, config.n_cores, self.__MultiGetClosePoints)
-        indices_of_box_pts_close_to_molecule_points = np.unique(np.hstack(tmp.results))
 
-        self.points = np.delete(
-            self.points, indices_of_box_pts_close_to_molecule_points, axis=0
-        )  # remove the ones that are too close to molecule atoms
+        # Initialize MultiprocessingManager with the appropriate task class
+        manager = MultiprocessingManager(
+            inputs=chunks,
+            n_cores=config.n_cores,
+            task_class=MultiprocessingGetClosePointsTask,
+        )
 
-    class __MultiGetClosePoints(GeneralTask):
-        """A class to remove box points that are near other, user-specified
-        points, using multiple processors."""
+        # Collect results and find unique indices
+        processed_chunks = manager.results
 
-        def value_func(self, items, results_queue):  # so overwriting this function
-            """The calculations that will run on a single processor."""
+        # Each element in processed_chunks is either a numpy array of indices or an error tuple
+        valid_indices = []
+        for result in processed_chunks:
+            if isinstance(result, tuple) and result[0] == "error":
+                logger.error(f"Error getting close points: {result[1]}")
+            else:
+                valid_indices.append(result)
 
-            box_of_pts_distance_tree = items[0]
-            dist_cutoff = items[1]
-            other_points = items[2]
-
-            # note, in newer versions of scipy use cKDTree
-            other_points_distance_tree = spatial.KDTree(other_points)
-            sparce_distance_matrix = other_points_distance_tree.sparse_distance_matrix(
-                box_of_pts_distance_tree, dist_cutoff
-            )
+        if valid_indices:
             indices_of_box_pts_close_to_molecule_points = np.unique(
-                sparce_distance_matrix.tocsr().indices
+                np.hstack(valid_indices)
             )
-
-            self.results.append(indices_of_box_pts_close_to_molecule_points)
+            self.points = np.delete(
+                self.points, indices_of_box_pts_close_to_molecule_points, axis=0
+            )  # remove the ones that are too close to molecule atoms
 
     def to_pdb(self, let="X"):
         """Converts the points in this box into a PDB representation.
