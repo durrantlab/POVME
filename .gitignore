@@ -11,3 +11,8 @@ public
 
 __pycache__
 .vscode
+
+# Coverage
+.coverage
+coverage.xml
+report.xml

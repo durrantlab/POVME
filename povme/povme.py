@@ -8,9 +8,9 @@ from io import StringIO
 
 import numpy as np
 from loguru import logger
+from pymolecule import Molecule
 from scipy.spatial.distance import cdist
 
-from . import pymolecule
 from .config import POVMEConfig
 from .hull import MultithreadingCalcVolumeTask
 from .io import dx_freq, gzopenfile, numpy_to_pdb, openfile, write_to_file
@@ -54,8 +54,8 @@ class MultithreadingStringToMoleculeTask(MultithreadingTaskGeneral):
 
         # make the pdb object
         str_obj = StringIO(pdb_string)
-        tmp = pymolecule.Molecule()
-        tmp.fileio.load_pdb_into_using_file_object(str_obj, False, False, False)
+        tmp = Molecule()
+        tmp.io.load_pdb_into_using_file_object(str_obj, False, False, False)
 
         logger.debug("\tFurther processing frame " + str(index))
 
@@ -64,7 +64,7 @@ class MultithreadingStringToMoleculeTask(MultithreadingTaskGeneral):
             self.results.append((index, tmp))
         else:  # save to disk, record filename
             pym_filename = f"./.povme_tmp/frame_{str(index)}.pym"
-            tmp.fileio.save_pym(pym_filename, False, False, False, False, False)
+            tmp.io.save_pym(pym_filename, False, False, False, False, False)
             self.results.append((index, pym_filename))
 
 

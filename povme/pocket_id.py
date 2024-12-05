@@ -2,6 +2,7 @@ import os
 
 import numpy as np
 from loguru import logger
+from pymolecule import Molecule
 from scipy.cluster.vq import kmeans2
 from scipy.spatial.distance import cdist
 
@@ -9,7 +10,6 @@ from .config import PocketIDConfig
 from .hull import ConvexHull
 from .io import openfile, write_pdbs
 from .pocket import BoxOfPoints
-from .pymolecule import Molecule
 
 
 class PocketDetector:
@@ -43,7 +43,7 @@ class PocketDetector:
 
         logger.info("Step 1. Loading the PDB file " + path_pdb + "...")
         molecule = Molecule()
-        molecule.fileio.load_pdb_into(path_pdb)
+        molecule.io.load_pdb_into(path_pdb)
 
         # Step 2: Get rid of hydogen atoms. They just slow stuff down.
 
