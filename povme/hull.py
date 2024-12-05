@@ -556,7 +556,7 @@ class MultithreadingCalcVolumeTask(MultithreadingTaskGeneral):
                     contig_pts = pts[index_all_pts_close_to_contig_pts]
 
                 pts = contig_pts
-            except:
+            except Exception:
                 logger.exception(
                     "Frame "
                     + str(frame_indx)

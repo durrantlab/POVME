@@ -15,7 +15,7 @@ from .config import POVMEConfig
 from .hull import MultithreadingCalcVolumeTask
 from .io import dx_freq, gzopenfile, numpy_to_pdb, openfile, write_to_file
 from .parallel import MultiThreading, MultithreadingTaskGeneral
-from .region import Region
+from .points.regions import collect_regions
 
 
 def get_unique_rows(a):
@@ -137,74 +137,27 @@ class POVME:
 
         return molecules
 
-    @staticmethod
-    def _get_regions_include(config):
-        regions = []
-        for inclusion_sphere in config.points_inclusion_sphere:
-            if len(inclusion_sphere) == 0:
-                continue
-            region = Region()
-            region.make_sphere(inclusion_sphere)
-            regions.append(region)
-        for inclusion_box in config.points_inclusion_box:
-            if len(inclusion_box) == 0:
-                continue
-            region = Region()
-            region.make_box(inclusion_box)
-            regions.append(region)
-        return regions
-
-    @staticmethod
-    def _get_regions_contig(config):
-        regions = []
-        for contig_sphere in config.contiguous_pocket_seed_sphere:
-            if len(contig_sphere) == 0:
-                continue
-            region = Region()
-            region.make_sphere(contig_sphere)
-            regions.append(region)
-        for contig_box in config.contiguous_pocket_seed_box:
-            if len(contig_box) == 0:
-                continue
-            region = Region()
-            region.make_box(contig_box)
-            regions.append(region)
-        return regions
-
-    @staticmethod
-    def _get_regions_exclude(config):
-        regions = []
-        for exclusion_sphere in config.points_exclusion_sphere:
-            if len(exclusion_sphere) == 0:
-                continue
-            region = Region()
-            region.make_sphere(exclusion_sphere)
-            regions.append(region)
-        for exclusion_box in config.points_exclusion_box:
-            if len(exclusion_box) == 0:
-                continue
-            region = Region()
-            region.make_box(exclusion_box)
-            regions.append(region)
-        return regions
-
     def gen_points(self, config):
         logger.info("Generating the pocket-encompassing point field")
 
         # get all the points of the inclusion regions
-        regions_include = self._get_regions_include(config)
-        pts = regions_include[0].points_set(config.grid_spacing)
+        regions_include = collect_regions(
+            config.points_inclusion_sphere, config.points_inclusion_box
+        )
+        pts = regions_include[0].get_points(config.grid_spacing)
         for Included in regions_include[1:]:
-            pts = np.vstack((pts, Included.points_set(config.grid_spacing)))
+            pts = np.vstack((pts, Included.get_points(config.grid_spacing)))
         pts = get_unique_rows(pts)
 
         # get all the points of the exclusion regions
-        regions_exclude = self._get_regions_exclude(config)
+        regions_exclude = collect_regions(
+            config.points_exclusion_sphere, config.points_exclusion_box
+        )
         if len(regions_exclude) > 0:
-            pts_exclusion = regions_exclude[0].points_set(config.grid_spacing)
+            pts_exclusion = regions_exclude[0].get_points(config.grid_spacing)
             for Excluded in regions_exclude[1:]:
                 pts_exclusion = np.vstack(
-                    (pts_exclusion, Excluded.points_set(config.grid_spacing))
+                    (pts_exclusion, Excluded.get_points(config.grid_spacing))
                 )
             pts_exclusion = get_unique_rows(pts_exclusion)
 
@@ -246,9 +199,9 @@ class POVME:
     def write_points_contig(self, regions_contig, output_prefix, config):
 
         # get all the contiguous points
-        contig_pts = regions_contig[0].points_set(config.grid_spacing)
+        contig_pts = regions_contig[0].get_points(config.grid_spacing)
         for Contig in regions_contig[1:]:
-            contig_pts = np.vstack((contig_pts, Contig.points_set(config.grid_spacing)))
+            contig_pts = np.vstack((contig_pts, Contig.get_points(config.grid_spacing)))
         contig_pts = get_unique_rows(contig_pts)
 
         logger.info("\nSaving the contiguous-pocket seed points as a PDB file")
@@ -369,7 +322,7 @@ class POVME:
                     pt_key = str(pt[0]) + ";" + str(pt[1]) + ";" + str(pt[2])
                     try:
                         unique_points[pt_key] = unique_points[pt_key] + 1
-                    except:
+                    except Exception:
                         unique_points[pt_key] = 1
         if overall_min[0] == 1e100:
             logger.info(
@@ -405,7 +358,7 @@ class POVME:
 
                         try:
                             all_pts[i][3] = unique_points[key]
-                        except:
+                        except Exception:
                             pass
 
                         i = i + 1
@@ -471,7 +424,9 @@ class POVME:
             sys.exit(0)
 
         # Handle contig TODO:
-        regions_contig = self._get_regions_contig(config)
+        regions_contig = collect_regions(
+            config.contiguous_pocket_seed_sphere, config.contiguous_pocket_seed_box
+        )
         if len(regions_contig) > 0:
             self.write_points_contig(regions_contig, output_prefix, config)
 

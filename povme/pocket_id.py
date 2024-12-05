@@ -215,7 +215,7 @@ class PocketDetector:
                     pts_string = pts_string + write_some_pdbs.numpy_to_pdb(
                         cluster_pts, let_ids[cluster_num]
                     )
-                except:
+                except Exception:
                     logger.info(
                         "There was an error, but I don't think it was catastrophic. Could be that one of the pocket clusters was empty."
                     )

@@ -3,17 +3,22 @@ grid_spacing: 1.0
 load_points_path: null
 
 points_inclusion_sphere:
-  - [65.0, 98.0, 50.0, 16.0]
-  - [-100.0, -100.0, -100.0, 10.0]
+  - center: [65.0, 98.0, 50.0]
+    radius: 16.0
+  - center: [-100.0, -100.0, -100.0]
+    radius: 10.0
 
 points_inclusion_box:
-  - [100.0, 100.0, 100.0, 10.0, 10.0, 10.0]
+  - center: [100.0, 100.0, 100.0]
+    lengths: [10.0, 10.0, 10.0]
 
 points_exclusion_sphere:
-  - [-100.0, -100.0, -100.0, 10.0]
+  - center: [-100.0, -100.0, -100.0]
+    radius: 10.0
 
 points_exclusion_box:
-  - [100.0, 100.0, 100.0, 10.0, 10.0, 10.0]
+  - center: [100.0, 100.0, 100.0]
+    lengths: [10.0, 10.0, 10.0]
 
 save_points: true
 
@@ -22,7 +27,8 @@ distance_cutoff: 1.09
 convex_hull_exclusion: true
 
 contiguous_pocket_seed_sphere:
-  - [67.0, 102.0, 57.0, 4.0]
+  - center: [67.0, 102.0, 57.0]
+    radius: 4.0
 
 contiguous_pocket_seed_box:
   - []
