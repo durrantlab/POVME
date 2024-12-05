@@ -9,7 +9,7 @@ from scipy.spatial.distance import cdist
 from .config import PocketIDConfig
 from .hull import ConvexHull
 from .io import openfile, write_pdbs
-from .pocket import BoxOfPoints
+from .points import GridMesh
 
 
 class PocketDetector:
@@ -77,7 +77,7 @@ class PocketDetector:
 
         # note that the initial box is low resolution (* 4) so convex hull will be
         # very fast
-        box_pts = BoxOfPoints(
+        box_pts = GridMesh(
             molecule.information.get_bounding_box(),
             config.pocket_detection_resolution * 4,
         )

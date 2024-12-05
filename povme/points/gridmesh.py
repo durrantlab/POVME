@@ -5,9 +5,9 @@ import numpy.typing as npt
 from loguru import logger
 from scipy import spatial
 
-from .config import POVMEConfig
-from .io import write_pdbs
-from .parallel import MultiprocessingManager, MultiprocessingTaskGeneral
+from ..config import POVMEConfig
+from ..io import write_pdbs
+from ..parallel import MultiprocessingManager, MultiprocessingTaskGeneral
 
 
 class MultiprocessingRemovePointsOutsideHullTask(MultiprocessingTaskGeneral):
@@ -70,7 +70,7 @@ class MultiprocessingGetClosePointsTask(MultiprocessingTaskGeneral):
             return np.array([])  # Return empty array on error
 
 
-class BoxOfPoints:
+class GridMesh:
     """A class representing a box of equidistant points."""
 
     def __init__(self, box: npt.NDArray[np.float64], reso: int) -> None:
