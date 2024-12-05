@@ -1,9 +1,32 @@
-from typing import Any
+from typing import Any, Callable
 
 import multiprocessing
 import platform
 
 from loguru import logger
+
+# Global variable to hold the task instance per process
+_task_instance: Any = None
+
+
+def init_worker(task_class: Callable[[], Any]) -> None:
+    """
+    Initializes a global task instance for each worker process.
+    """
+    global _task_instance
+    _task_instance = task_class()
+
+
+def worker(item: Any) -> Any:
+    """
+    Worker function that processes a single item using the global task instance.
+    """
+    try:
+        result = _task_instance.runit(item)
+        return result
+    except Exception as e:
+        logger.exception(f"Error processing item {item}: {e}")
+        return ("error", str(e))
 
 
 class MultiprocessingManager:
@@ -45,12 +68,12 @@ class MultiprocessingManager:
                 return
 
             try:
-                with multiprocessing.Pool(processes=num_processors) as pool:
-                    # Initialize separate instances for each process
-                    task_instances = [task_class() for _ in range(num_processors)]
-                    self.results = pool.map(
-                        lambda args: args[0].runit(args[1]), zip(task_instances, inputs)
-                    )
+                with multiprocessing.Pool(
+                    processes=num_processors,
+                    initializer=init_worker,
+                    initargs=(task_class,),
+                ) as pool:
+                    self.results = pool.map(worker, inputs)
             except KeyboardInterrupt:
                 print("Process interrupted by user. Terminating pool...")
                 pool.terminate()

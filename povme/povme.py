@@ -34,38 +34,46 @@ def get_unique_rows(a):
     return np.unique(b).view(a.dtype).reshape(-1, a.shape[1])  # unique_a
 
 
-class MultithreadingStringToMoleculeTask(MultiprocessingTaskGeneral):
+class MultiprocessingStringToMoleculeTask(MultiprocessingTaskGeneral):
     """A class for loading PDB frames (as strings) into pymolecule.Molecule
     objects."""
 
-    def value_func(self, item, results_queue):
+    def value_func(
+        self, item: tuple[str, int, Any]
+    ) -> tuple[int, Molecule] | tuple[str, str]:
         """Convert a PDB string into a pymolecule.Molecule object.
 
         Args:
-            item: A list or tuple, the input data required for the calculation.
-            results_queue: A multiprocessing.Queue() object for storing the
-                calculation output.
+            item: A tuple containing:
+                - pdb_string: The PDB data as a string.
+                - index: The frame index.
+                - config: Configuration object.
 
+        Returns:
+            A tuple with frame index and the Molecule object or the filename.
         """
+        try:
+            pdb_string, index, config = item
 
-        pdb_string = item[0]
-        index = item[1]
-        config = item[2]
+            # Create the PDB object
+            str_obj = StringIO(pdb_string)
+            tmp = Molecule()
+            tmp.io.load_pdb_into_using_file_object(str_obj, False, False, False)
 
-        # make the pdb object
-        str_obj = StringIO(pdb_string)
-        tmp = Molecule()
-        tmp.io.load_pdb_into_using_file_object(str_obj, False, False, False)
+            logger.debug(f"\tFurther processing frame {index}")
 
-        logger.debug("\tFurther processing frame " + str(index))
+            if not config.use_disk_not_memory:
+                # Return the Molecule object directly
+                return (index, tmp)
+            else:
+                # Save to disk and return the filename
+                pym_filename = f"./.povme_tmp/frame_{index}.pym"
+                tmp.io.save_pym(pym_filename, False, False, False, False, False)
+                return (index, pym_filename)
 
-        # so load the whole trajectory into memory
-        if not config.use_disk_not_memory:
-            self.results.append((index, tmp))
-        else:  # save to disk, record filename
-            pym_filename = f"./.povme_tmp/frame_{str(index)}.pym"
-            tmp.io.save_pym(pym_filename, False, False, False, False, False)
-            self.results.append((index, pym_filename))
+        except Exception as e:
+            logger.exception(f"Error processing frame {index}: {e}")
+            return ("error", str(e))
 
 
 class POVME:
@@ -128,12 +136,12 @@ class POVME:
             pdb_strings.remove("")
 
         # now convert each pdb string into a pymolecule.Molecule object
-        molecules = MultiprocessingManager(
+        manager = MultiprocessingManager(
             [(pdb_strings[idx], idx + 1, config) for idx in range(len(pdb_strings))],
             config.num_processors,
-            MultithreadingStringToMoleculeTask,
+            MultiprocessingStringToMoleculeTask,
         )
-        molecules = molecules.results
+        molecules = manager.results
 
         return molecules
 

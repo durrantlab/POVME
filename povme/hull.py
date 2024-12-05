@@ -558,10 +558,10 @@ class MultiprocessingCalcVolumeTask(MultiprocessingTaskGeneral):
 
                 # get all the points in the defined parameters['ContiguousPocket']
                 # seed regions
-                contig_pts = regions_contig[0].points_set(config.grid_spacing)
+                contig_pts = regions_contig[0].get_points(config.grid_spacing)
                 for Contig in regions_contig[1:]:
                     contig_pts = np.vstack(
-                        (contig_pts, Contig.points_set(config.grid_spacing))
+                        (contig_pts, Contig.get_points(config.grid_spacing))
                     )
                 contig_pts = unique_rows(contig_pts)
 
