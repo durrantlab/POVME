@@ -44,7 +44,6 @@ setuptools = ">=75.3.0,<76"
 types-pyyaml = ">=6.0.12.20240917,<7"
 scalene = ">=1.5.41,<2"
 
-
 [feature.dev.tasks]
 mdlint = { cmd = ["markdownlint-cli2", '"**/*.{md,markdown}"', "--fix", "--config", ".markdownlint.yaml", "||", "true"] }
 isort = { cmd = ["isort", "--settings-path", ".isort.cfg", "./povme", "./tests", "||", "true"] }

@@ -1,5 +1,3 @@
-from typing import Any
-
 import math
 import time
 from functools import reduce
@@ -433,32 +431,19 @@ class ConvexHull:
 
         # get vdw... you might want to fill this out with additional vdw
         # values
-        vdw[
-            np.nonzero(pdb.information.atom_information["element_stripped"] == b"H")[0]
-        ] = 1.2
-        vdw[
-            np.nonzero(pdb.information.atom_information["element_stripped"] == b"C")[0]
-        ] = 1.7
-        vdw[
-            np.nonzero(pdb.information.atom_information["element_stripped"] == b"N")[0]
-        ] = 1.55
-        vdw[
-            np.nonzero(pdb.information.atom_information["element_stripped"] == b"O")[0]
-        ] = 1.52
-        vdw[
-            np.nonzero(pdb.information.atom_information["element_stripped"] == b"F")[0]
-        ] = 1.47
-        vdw[
-            np.nonzero(pdb.information.atom_information["element_stripped"] == b"P")[0]
-        ] = 1.8
-        vdw[
-            np.nonzero(pdb.information.atom_information["element_stripped"] == b"S")[0]
-        ] = 1.8
-        vdw = np.repeat(np.array([vdw]).T, len(pts), axis=1)
+        vdw[pdb.information.atom_information["element_stripped"] == b"H"] = 1.2
+        vdw[pdb.information.atom_information["element_stripped"] == b"C"] = 1.7
+        vdw[pdb.information.atom_information["element_stripped"] == b"N"] = 1.55
+        vdw[pdb.information.atom_information["element_stripped"] == b"O"] = 1.52
+        vdw[pdb.information.atom_information["element_stripped"] == b"F"] = 1.47
+        vdw[pdb.information.atom_information["element_stripped"] == b"P"] = 1.8
+        vdw[pdb.information.atom_information["element_stripped"] == b"S"] = 1.8
 
         # now identify the points that are close to the protein atoms
+        cutoff = vdw[:, None] + config.distance_cutoff
         dists = cdist(pdb.information.coordinates, pts)
-        close_pt_index = np.nonzero((dists < (vdw + config.distance_cutoff)))[1]
+
+        close_pt_index = np.nonzero(dists < cutoff)[1]
 
         # now keep the appropriate points
         pts = np.delete(pts, close_pt_index, axis=0)
