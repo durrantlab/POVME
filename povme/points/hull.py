@@ -7,6 +7,7 @@ import numpy.typing as npt
 from loguru import logger
 from pymolecule import Molecule
 from scipy.spatial.distance import cdist, pdist, squareform
+from scipy.spatial import cKDTree
 
 from povme.io import gzopenfile, numpy_to_pdb, openfile, write_to_file
 from povme.parallel import RayTaskGeneral
@@ -388,65 +389,64 @@ class ConvexHull:
         max_pts = np.max(pts, 0) + config.distance_cutoff + 1
 
         # identify atoms that are so far away from points that they can be
-        # ignored. First, x's too small.
-        index_to_keep1 = np.nonzero((pdb.information.coordinates[:, 0] > min_pts[0]))[0]
-
-        # x's too large
-        index_to_keep2 = np.nonzero((pdb.information.coordinates[:, 0] < max_pts[0]))[0]
-
-        # y's too small
-        index_to_keep3 = np.nonzero((pdb.information.coordinates[:, 1] > min_pts[1]))[0]
-
-        # y's too large
-        index_to_keep4 = np.nonzero((pdb.information.coordinates[:, 1] < max_pts[1]))[0]
-
-        # z's too small
-        index_to_keep5 = np.nonzero((pdb.information.coordinates[:, 2] > min_pts[2]))[0]
-
-        # z's too large
-        index_to_keep6 = np.nonzero((pdb.information.coordinates[:, 2] < max_pts[2]))[0]
-
-        index_to_keep = np.intersect1d(
-            index_to_keep1, index_to_keep2, assume_unique=True
-        )
-        index_to_keep = np.intersect1d(
-            index_to_keep, index_to_keep3, assume_unique=True
-        )
-        index_to_keep = np.intersect1d(
-            index_to_keep, index_to_keep4, assume_unique=True
-        )
-        index_to_keep = np.intersect1d(
-            index_to_keep, index_to_keep5, assume_unique=True
-        )
-        index_to_keep = np.intersect1d(
-            index_to_keep, index_to_keep6, assume_unique=True
-        )
+        coords = pdb.information.coordinates
+        x_keep = (coords[:, 0] >= min_pts[0]) & (coords[:, 0] <= max_pts[0])
+        y_keep = (coords[:, 1] >= min_pts[1]) & (coords[:, 1] <= max_pts[1])
+        z_keep = (coords[:, 2] >= min_pts[2]) & (coords[:, 2] <= max_pts[2])
+        keep_indices = np.where(x_keep & y_keep & z_keep)[0]
 
         # keep only relevant atoms
-        if len(index_to_keep) > 0:
-            pdb = pdb.selections.create_molecule_from_selection(index_to_keep)
+        if len(keep_indices) > 0:
+            pdb = pdb.selections.create_molecule_from_selection(keep_indices)
+            coords = pdb.information.coordinates
+        else:
+            # No atoms to consider, so all points remain if no hull is needed
+            # Just calculate the volume and exit early if needed
+            volume = len(pts) * (config.grid_spacing**3)
+            return (frame_indx, volume, {})
 
         # get the vdw radii of each protein atom
-        vdw = np.ones(len(pdb.information.coordinates))  # so the default vdw is 1.0
+        vdw = np.ones(len(coords))
+        element_stripped = pdb.information.atom_information["element_stripped"]
+        vdw[element_stripped == b"H"] = 1.2
+        vdw[element_stripped == b"C"] = 1.7
+        vdw[element_stripped == b"N"] = 1.55
+        vdw[element_stripped == b"O"] = 1.52
+        vdw[element_stripped == b"F"] = 1.47
+        vdw[element_stripped == b"P"] = 1.8
+        vdw[element_stripped == b"S"] = 1.8
 
-        # get vdw... you might want to fill this out with additional vdw
-        # values
-        vdw[pdb.information.atom_information["element_stripped"] == b"H"] = 1.2
-        vdw[pdb.information.atom_information["element_stripped"] == b"C"] = 1.7
-        vdw[pdb.information.atom_information["element_stripped"] == b"N"] = 1.55
-        vdw[pdb.information.atom_information["element_stripped"] == b"O"] = 1.52
-        vdw[pdb.information.atom_information["element_stripped"] == b"F"] = 1.47
-        vdw[pdb.information.atom_information["element_stripped"] == b"P"] = 1.8
-        vdw[pdb.information.atom_information["element_stripped"] == b"S"] = 1.8
+        # Create a KD-tree for atom coordinates
+        atom_tree = cKDTree(coords)
 
-        # now identify the points that are close to the protein atoms
-        cutoff = vdw[:, None] + config.distance_cutoff
-        dists = cdist(pdb.information.coordinates, pts)
+        # Compute the maximum cutoff for searching
+        # Since each atom might have a different vdw radius, we must take the max
+        max_cutoff = np.max(vdw) + config.distance_cutoff
 
-        close_pt_index = np.nonzero(dists < cutoff)[1]
+        # Query nearby atoms for each point using the KD-tree
+        # This returns a list of arrays, where each entry corresponds to a point
+        # and contains the indices of atoms within max_cutoff radius.
+        candidate_indices = atom_tree.query_ball_point(pts, r=max_cutoff)
+
+        # Now filter points that are too close to at least one atom
+        close_pt_indices = []
+        for i, atom_inds in enumerate(candidate_indices):
+            if len(atom_inds) == 0:
+                # No nearby atoms, so this point is safe
+                continue
+            # Distances to these candidate atoms
+            candidate_coords = coords[atom_inds]
+            dist_subset = np.sqrt(np.sum((candidate_coords - pts[i])**2, axis=1))
+
+            # Each atom has a different cutoff: vdw[atom_ind] + config.distance_cutoff
+            atom_cutoffs = vdw[atom_inds] + config.distance_cutoff
+            if np.any(dist_subset < atom_cutoffs):
+                close_pt_indices.append(i)
+
+        close_pt_indices = np.array(close_pt_indices, dtype=int)
 
         # now keep the appropriate points
-        pts = np.delete(pts, close_pt_index, axis=0)
+        pts = np.delete(pts, close_pt_indices, axis=0)
 
         # exclude points outside convex hull
         if config.convex_hull_exclusion:
