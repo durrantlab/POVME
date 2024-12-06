@@ -20,7 +20,7 @@ jobs:
         uses: prefix-dev/setup-pixi@v0.8.1
 
       - name: Setup environment
-        run: pixi install
+        run: pixi --frozen install
 
       - name: Run tests
         run: pixi run tests
