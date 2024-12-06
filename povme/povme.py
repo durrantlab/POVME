@@ -1,4 +1,4 @@
-from typing import Any
+from typing import Any, Generator
 
 import csv
 import os
@@ -15,7 +15,7 @@ from scipy.spatial.distance import cdist
 from .config import POVMEConfig
 from .io import dx_freq, gzopenfile, numpy_to_pdb, openfile, write_to_file
 from .parallel import RayManager, RayTaskGeneral
-from .points.hull import TaskCalcVolume
+from .points.hull import ConvexHull
 from .points.regions import collect_regions
 
 
@@ -63,45 +63,91 @@ def get_unique_rows(a):
     return np.unique(b).view(a.dtype).reshape(-1, a.shape[1])  # unique_a
 
 
-class TaskStringToMolecule(RayTaskGeneral):
-    """A class for loading PDB frames (as strings) into pymolecule.Molecule
-    objects."""
+def load_multi_frame_pdb_generator(
+    filename: str,
+) -> Generator[tuple[str, int], None, None]:
+    """Generator to yield PDB frames one by one.
 
-    def value_func(
-        self, item: tuple[str, int, Any]
-    ) -> tuple[int, Molecule] | tuple[str, str]:
-        """Convert a PDB string into a pymolecule.Molecule object.
+    Args:
+        filename: Path to the multi-frame PDB file.
 
-        Args:
-            item: A tuple containing:
-                - pdb_string: The PDB data as a string.
-                - index: The frame index.
-                - config: Configuration object.
-
-        Returns:
-            A tuple with frame index and the Molecule object or the filename.
-        """
-        try:
-            pdb_string, index, config = item
-
-            # Create the PDB object
-            str_obj = StringIO(pdb_string)
-            tmp = Molecule()
-            tmp.io.load_pdb_into_using_file_object(str_obj, False, False, False)
-
-            logger.debug(f"\tFurther processing frame {index}")
-
-            if not config.use_disk_not_memory:
-                # Return the Molecule object directly
-                return (index, tmp)
+    Yields:
+        A tuple containing the PDB string and its frame index.
+    """
+    with open(filename, "r") as f:
+        frame_idx = 1
+        pdb_lines: list[str] = []
+        for line in f:
+            if line.startswith("END"):
+                if pdb_lines:
+                    pdb_string = "".join(pdb_lines)
+                    yield (pdb_string, frame_idx)
+                    frame_idx += 1
+                    pdb_lines = []
             else:
-                # Save to disk and return the filename
-                pym_filename = f"./.povme_tmp/frame_{index}.pym"
-                tmp.io.save_pym(pym_filename, False, False, False, False, False)
-                return (index, pym_filename)
+                pdb_lines.append(line)
+        # Yield the last frame if the file doesn't end with 'END'
+        if pdb_lines:
+            pdb_string = "".join(pdb_lines)
+            yield (pdb_string, frame_idx)
 
+
+def collect_pdb_frames_in_chunks(
+    filename: str, chunk_size: int
+) -> Generator[list[tuple[int, str]], None, None]:
+    """
+    Read a multi-frame PDB and yield frames in chunks.
+
+    Each yielded chunk is a list of (frame_index, pdb_frame_string).
+    """
+    frame_buffer: list[str] = []
+    frame_index = 0
+    chunk = []
+
+    with open(filename, "rb") as f:
+        for line in f:
+            if line.startswith(b"END"):
+                # A frame ended
+                if frame_buffer:
+                    frame_index += 1
+                    chunk.append((frame_index, "".join(frame_buffer)))
+                    frame_buffer = []
+
+                    # If we have reached the chunk_size, yield it
+                    if len(chunk) == chunk_size:
+                        yield chunk
+                        chunk = []
+            else:
+                frame_buffer.append(line.decode())
+
+        # If file does not end with END and we still have a frame collected
+        if frame_buffer:
+            frame_index += 1
+            chunk.append((frame_index, "".join(frame_buffer)))
+
+        # Yield any remaining frames if they don't fill an entire chunk
+        if chunk:
+            yield chunk
+
+
+class TaskComputeVolumeFromPDBLines(RayTaskGeneral):
+
+    def value_func(self, item: tuple[Any, ...]) -> tuple[Any, ...]:
+        frame_index, pdb_string, config, pts, regions_contig, output_prefix = item
+
+        # Load the PDB from lines
+        str_obj = StringIO(pdb_string)
+        pdb = Molecule()
+        pdb.io.load_pdb_into_using_file_object(str_obj, False, False, False)
+
+        # From here, do the volume calculation steps (adapted from TaskCalcVolume)
+        try:
+            volumes = ConvexHull.volume(
+                frame_index, pdb, pts, regions_contig, output_prefix, config
+            )
+            return volumes
         except Exception as e:
-            logger.exception(f"Error processing frame {index}: {e}")
+            logger.exception(f"Error in frame {frame_index}: {e}")
             return ("error", str(e))
 
 
@@ -121,64 +167,6 @@ class POVME:
         self.config = POVMEConfig()
         if path_config is not None:
             self.config.from_yaml(path_config)
-
-    def load_multi_frame_pdb(
-        self, filename: str, config: POVMEConfig
-    ) -> list[tuple[int, Molecule | str]]:
-        """Load a multi-frame PDB into memory or into separate files
-        (depending on user specifications.
-
-        Args:
-            filename: A string, the filename of the multi-frame PDB.
-            config: POVMEConfig object.
-
-        Returns:
-            If the user has requested that the disk be used to save memory, this
-                function returns a list of tuples, where the first item in each
-                tuple is the frame index, and the second is a filename containing
-                the individual frame. If memory is to be used instead of the disk,
-                this function returns a list of tuples, where the first item in
-                each tuple is the frame index, and the second is a
-                pymolecule.Molecule object representing the frame.
-
-        """
-        pdb_strings = []
-        growing_string = ""
-
-        logger.info(f"Reading frames from {filename}")
-
-        with open(filename, "rb") as f:
-            for line in f:
-                if line.startswith(b"END"):
-                    if growing_string:
-                        pdb_strings.append(growing_string)
-                    growing_string = ""
-                else:
-                    growing_string += line.decode()
-            # Append the last frame if the file doesn't end with 'END'
-            if growing_string:
-                pdb_strings.append(growing_string)
-
-        # Remove any empty strings
-        pdb_strings = [s for s in pdb_strings if s]
-
-        logger.info(f"Total frames extracted: {len(pdb_strings)}")
-
-        # Prepare inputs for RayManager
-        inputs = [
-            (pdb_strings[idx], idx + 1, config) for idx in range(len(pdb_strings))
-        ]
-
-        # Initialize RayManager with the updated task class
-        ray_manager = RayManager(
-            task_class=TaskStringToMolecule, n_cores=config.n_cores
-        )
-        ray_manager.submit_tasks(inputs)
-        molecules = ray_manager.get_results()
-
-        logger.info("Completed processing all frames.")
-
-        return molecules
 
     def gen_points(self, config):
         logger.info("Generating the pocket-encompassing point field")
@@ -268,37 +256,6 @@ class POVME:
             + points_filename
             + " to permit visualization"
         )
-
-    def compute_volume(self, path_pdb, pts, regions_contig, output_prefix, config):
-        # Load PDB frames
-        index_and_pdbs = self.load_multi_frame_pdb(path_pdb, config)
-        if len(index_and_pdbs) == 0:
-            raise RuntimeError("PDB parsing results are nonexistent")
-
-        # Prepare inputs
-        inputs = [
-            (index, pdb_object, pts, regions_contig, output_prefix, config)
-            for index, pdb_object in index_and_pdbs
-        ]
-
-        # Initialize RayManager
-        ray_manager = RayManager(task_class=TaskCalcVolume, n_cores=config.n_cores)
-        init_vol_csv(output_prefix)
-        ray_manager.submit_tasks(
-            inputs,
-            save_func=write_vol_csv,
-            save_kwargs={"output_prefix": output_prefix},
-        )
-        results = ray_manager.get_results()
-        if len(results) == 0:
-            raise RuntimeError("Volume results are nonexistent")
-
-        # Cleanup
-        if config.use_disk_not_memory:
-            if os.path.exists("./.povme_tmp"):
-                shutil.rmtree("./.povme_tmp")
-        logger.info("Execution time = " + str(time.time() - self.t_start) + " sec")
-        return results
 
     @staticmethod
     def write_vol_traj(results_vol, output_prefix, config):
@@ -397,9 +354,7 @@ class POVME:
             dx_freq(all_pts, output_prefix, config)  # save the dx file
 
     def run(
-        self,
-        path_pdb: str,
-        output_prefix: str | None = None,
+        self, path_pdb: str, output_prefix: str | None = None, chunk_size: int = 10
     ) -> dict[str, Any]:
         """Start POVME
 
@@ -463,12 +418,42 @@ class POVME:
         if not os.path.exists(path_pdb):
             logger.error(f"PDB file {path_pdb} does not exits!")
             sys.exit(0)
-        results = self.compute_volume(
-            path_pdb, pts, regions_contig, output_prefix, config
+
+        # Initialize RayManager
+        ray_manager = RayManager(
+            task_class=TaskComputeVolumeFromPDBLines, n_cores=config.n_cores
         )
-        results_vol = {}
-        for result in results:
-            results_vol[result[0]] = result[1]
+        init_vol_csv(output_prefix)
+
+        # Collect frames in chunks and submit tasks to RayManager
+        for chunk in collect_pdb_frames_in_chunks(path_pdb, chunk_size):
+            # Each chunk is [(frame_index, pdb_string), ...]
+            tasks = []
+            for frame_index, pdb_string in chunk:
+                tasks.append(
+                    (
+                        frame_index,
+                        pdb_string,
+                        config,
+                        pts,
+                        regions_contig,
+                        output_prefix,
+                    )
+                )
+            ray_manager.submit_tasks(
+                tasks,
+                chunk_size=len(tasks),  # submit the chunk at once
+                save_func=write_vol_csv,  # save intermediate results to CSV
+                save_kwargs={"output_prefix": output_prefix},
+                save_interval=chunk_size,  # save after every chunk
+            )
+
+        results = ray_manager.get_results()
+        if len(results) == 0:
+            raise RuntimeError("No volume results obtained.")
+
+        # Process final results
+        results_vol = {r[0]: r[1] for r in results if r[0] != "error"}
 
         # if the user wanted a single trajectory containing all the
         # volumes, generate that here.

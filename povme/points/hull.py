@@ -1,3 +1,5 @@
+from typing import Any
+
 import math
 import time
 from functools import reduce
@@ -370,6 +372,232 @@ class ConvexHull:
 
         return not self.outside_hull(our_point, self.hull)
 
+    @staticmethod
+    def volume(frame_indx, pdb, pts, regions_contig, output_prefix, config):
+        # if the user wants to save empty points (points that are removed),
+        # then we need a copy of the original
+        if config.output_equal_num_points_per_frame:
+            pts_deleted = pts.copy()
+
+        # you may need to load it from disk if the user so specified
+        if config.use_disk_not_memory:  # so you need to load it from disk
+            pym_filename = pdb
+            pdb = Molecule()
+            pdb.io.load_pym_into(pym_filename)
+
+        # remove the points that are far from the points region anyway
+        min_pts = np.min(pts, 0) - config.distance_cutoff - 1
+        max_pts = np.max(pts, 0) + config.distance_cutoff + 1
+
+        # identify atoms that are so far away from points that they can be
+        # ignored. First, x's too small.
+        index_to_keep1 = np.nonzero((pdb.information.coordinates[:, 0] > min_pts[0]))[0]
+
+        # x's too large
+        index_to_keep2 = np.nonzero((pdb.information.coordinates[:, 0] < max_pts[0]))[0]
+
+        # y's too small
+        index_to_keep3 = np.nonzero((pdb.information.coordinates[:, 1] > min_pts[1]))[0]
+
+        # y's too large
+        index_to_keep4 = np.nonzero((pdb.information.coordinates[:, 1] < max_pts[1]))[0]
+
+        # z's too small
+        index_to_keep5 = np.nonzero((pdb.information.coordinates[:, 2] > min_pts[2]))[0]
+
+        # z's too large
+        index_to_keep6 = np.nonzero((pdb.information.coordinates[:, 2] < max_pts[2]))[0]
+
+        index_to_keep = np.intersect1d(
+            index_to_keep1, index_to_keep2, assume_unique=True
+        )
+        index_to_keep = np.intersect1d(
+            index_to_keep, index_to_keep3, assume_unique=True
+        )
+        index_to_keep = np.intersect1d(
+            index_to_keep, index_to_keep4, assume_unique=True
+        )
+        index_to_keep = np.intersect1d(
+            index_to_keep, index_to_keep5, assume_unique=True
+        )
+        index_to_keep = np.intersect1d(
+            index_to_keep, index_to_keep6, assume_unique=True
+        )
+
+        # keep only relevant atoms
+        if len(index_to_keep) > 0:
+            pdb = pdb.selections.create_molecule_from_selection(index_to_keep)
+
+        # get the vdw radii of each protein atom
+        vdw = np.ones(len(pdb.information.coordinates))  # so the default vdw is 1.0
+
+        # get vdw... you might want to fill this out with additional vdw
+        # values
+        vdw[
+            np.nonzero(pdb.information.atom_information["element_stripped"] == b"H")[0]
+        ] = 1.2
+        vdw[
+            np.nonzero(pdb.information.atom_information["element_stripped"] == b"C")[0]
+        ] = 1.7
+        vdw[
+            np.nonzero(pdb.information.atom_information["element_stripped"] == b"N")[0]
+        ] = 1.55
+        vdw[
+            np.nonzero(pdb.information.atom_information["element_stripped"] == b"O")[0]
+        ] = 1.52
+        vdw[
+            np.nonzero(pdb.information.atom_information["element_stripped"] == b"F")[0]
+        ] = 1.47
+        vdw[
+            np.nonzero(pdb.information.atom_information["element_stripped"] == b"P")[0]
+        ] = 1.8
+        vdw[
+            np.nonzero(pdb.information.atom_information["element_stripped"] == b"S")[0]
+        ] = 1.8
+        vdw = np.repeat(np.array([vdw]).T, len(pts), axis=1)
+
+        # now identify the points that are close to the protein atoms
+        dists = cdist(pdb.information.coordinates, pts)
+        close_pt_index = np.nonzero((dists < (vdw + config.distance_cutoff)))[1]
+
+        # now keep the appropriate points
+        pts = np.delete(pts, close_pt_index, axis=0)
+
+        # exclude points outside convex hull
+        if config.convex_hull_exclusion:
+            convex_hull_3d = ConvexHull(pts)
+
+            # get the coordinates of the non-hydrogen atoms (faster to discard
+            # hydrogens)
+            hydros = pdb.selections.select_atoms({"element_stripped": [b"H"]})
+            not_hydros = pdb.selections.invert_selection(hydros)
+            not_hydros_coors = pdb.information.coordinates[not_hydros]
+
+            # not_hydros = pdb.selections.select_atoms({'name_stripped':['CA']})
+            # not_hydros_coors = pdb.information.coordinates[not_hydros]
+
+            # modify pts here.
+            # note that the atoms of the pdb frame are in pdb.information.coordinates
+            # begintime = time.time() # measure execution time
+            akl_toussaint_pts = convex_hull_3d.akl_toussaint(
+                not_hydros_coors
+            )  # quickly reduces input size
+            # print "akl Toussaint:", time.time() - begintime
+            begintime = time.time()  # measure execution time
+            # calculate convex hull using gift wrapping algorithm
+            hull = convex_hull_3d.gift_wrapping_3d(akl_toussaint_pts)
+            # print "gift_wrapping:", time.time() - begintime
+
+            # we will need to regenerate the pts list, disregarding those
+            # outside the hull
+            old_pts = pts
+            pts = []
+            for pt in old_pts:
+                pt_outside = convex_hull_3d.outside_hull(
+                    pt, hull
+                )  # check if pt is outside hull
+                if not pt_outside:
+                    # if its not outside the hull, then include it in the
+                    # volume measurement
+                    pts.append(pt)
+            pts = np.array(pts)
+
+        # Now, enforce contiguity if needed
+        if len(regions_contig) > 0 and len(pts) > 0:
+            # first, for each point, determine how many neighbors it has to
+            # count kiddy-corner points too
+            cutoff_dist = config.grid_spacing * 1.01 * math.sqrt(3)
+            pts_dists = squareform(pdist(pts))
+            # minus 1 because an atom shouldn't be considered its own neighor
+            neighbor_counts = np.sum(pts_dists < cutoff_dist, axis=0) - 1
+
+            # remove all the points that don't have enough neighbors
+            pts = pts[
+                np.nonzero(neighbor_counts >= config.contiguous_points_criteria)[0]
+            ]
+
+            # get all the points in the defined parameters['ContiguousPocket']
+            # seed regions
+            contig_pts = regions_contig[0].get_points(config.grid_spacing)
+            for Contig in regions_contig[1:]:
+                contig_pts = np.vstack(
+                    (contig_pts, Contig.get_points(config.grid_spacing))
+                )
+            contig_pts = unique_rows(contig_pts)
+
+            try:  # error here if there are no points of contiguous seed region outside of protein volume.
+                # now just get the ones that are not near the protein
+                contig_pts = pts[np.nonzero(cdist(contig_pts, pts) < 1e-7)[1]]
+
+                last_size_of_contig_pts = 0
+                while last_size_of_contig_pts != len(contig_pts):
+                    last_size_of_contig_pts = len(contig_pts)
+
+                    # now get the indices of all points that are close to the
+                    # contig_pts
+                    all_pts_close_to_contig_pts_boolean = (
+                        cdist(pts, contig_pts) < cutoff_dist
+                    )
+                    index_all_pts_close_to_contig_pts = np.unique(
+                        np.nonzero(all_pts_close_to_contig_pts_boolean)[0]
+                    )
+                    contig_pts = pts[index_all_pts_close_to_contig_pts]
+
+                pts = contig_pts
+            except Exception:
+                logger.exception(
+                    "Frame "
+                    + str(frame_indx)
+                    + ": None of the points in the contiguous-pocket seed region\n\t\tare outside the volume of the protein! Assuming a pocket\n\t\tvolume of 0.0 A."
+                )
+                pts = np.array([])
+
+        # now write the pdb and calculate the volume
+        volume = len(pts) * math.pow(config.grid_spacing, 3)
+
+        logger.info("\tFrame " + str(frame_indx) + ": " + repr(volume) + " A^3")
+        if config.save_individual_pocket_volumes:
+            frame_text = f"REMARK Frame {str(frame_indx)}" + "\n"
+            frame_text += f"REMARK Volume = {repr(volume)}" + " Cubic Angstroms\n"
+            frame_text += numpy_to_pdb(pts, "X")
+
+            if config.output_equal_num_points_per_frame:
+                # you need to find the points that are in pts_deleted but not
+                # in pts
+                tmp = reduce(
+                    lambda x, y: x | np.all(pts_deleted == y, axis=-1),
+                    pts,
+                    np.zeros(pts_deleted.shape[:1], dtype=np.bool),
+                )
+                indices = np.where(tmp)[0]
+                pts_deleted = np.delete(pts_deleted, indices, axis=0)
+
+                # So extra points will always be at the origin. These can be
+                # easily hidden with your visualization software.
+                pts_deleted = np.zeros(pts_deleted.shape)
+                frame_text = frame_text + numpy_to_pdb(pts_deleted, "X", "XXX")
+
+            frame_text = frame_text + "END\n"
+
+            if config.compress_output:
+                fl = gzopenfile(
+                    output_prefix + "frame_" + str(frame_indx) + ".pdb.gz",
+                    "wb",
+                )
+            else:
+                fl = openfile(
+                    output_prefix + "frame_" + str(frame_indx) + ".pdb",
+                    "w",
+                )
+            write_to_file(fl, frame_text, encode=config.compress_output)
+            fl.close()
+
+        extra_data_to_add = {}
+        if config.save_volumetric_density_map:
+            extra_data_to_add["SaveVolumetricDensityMap"] = pts
+
+        return (frame_indx, volume, extra_data_to_add)
+
 
 class TaskCalcVolume(RayTaskGeneral):
     """A class for calculating the volume."""
@@ -383,261 +611,9 @@ class TaskCalcVolume(RayTaskGeneral):
         Returns:
             A tuple with frame index, calculated volume, and any extra data.
         """
-
-        frame_indx, pdb, pts, regions_contig, output_prefix, config = item
-
         try:
 
-            # if the user wants to save empty points (points that are removed),
-            # then we need a copy of the original
-            if config.output_equal_num_points_per_frame:
-                pts_deleted = pts.copy()
-
-            # you may need to load it from disk if the user so specified
-            if config.use_disk_not_memory:  # so you need to load it from disk
-                pym_filename = pdb
-                pdb = Molecule()
-                pdb.io.load_pym_into(pym_filename)
-
-            # remove the points that are far from the points region anyway
-            min_pts = np.min(pts, 0) - config.distance_cutoff - 1
-            max_pts = np.max(pts, 0) + config.distance_cutoff + 1
-
-            # identify atoms that are so far away from points that they can be
-            # ignored. First, x's too small.
-            index_to_keep1 = np.nonzero(
-                (pdb.information.coordinates[:, 0] > min_pts[0])
-            )[0]
-
-            # x's too large
-            index_to_keep2 = np.nonzero(
-                (pdb.information.coordinates[:, 0] < max_pts[0])
-            )[0]
-
-            # y's too small
-            index_to_keep3 = np.nonzero(
-                (pdb.information.coordinates[:, 1] > min_pts[1])
-            )[0]
-
-            # y's too large
-            index_to_keep4 = np.nonzero(
-                (pdb.information.coordinates[:, 1] < max_pts[1])
-            )[0]
-
-            # z's too small
-            index_to_keep5 = np.nonzero(
-                (pdb.information.coordinates[:, 2] > min_pts[2])
-            )[0]
-
-            # z's too large
-            index_to_keep6 = np.nonzero(
-                (pdb.information.coordinates[:, 2] < max_pts[2])
-            )[0]
-
-            index_to_keep = np.intersect1d(
-                index_to_keep1, index_to_keep2, assume_unique=True
-            )
-            index_to_keep = np.intersect1d(
-                index_to_keep, index_to_keep3, assume_unique=True
-            )
-            index_to_keep = np.intersect1d(
-                index_to_keep, index_to_keep4, assume_unique=True
-            )
-            index_to_keep = np.intersect1d(
-                index_to_keep, index_to_keep5, assume_unique=True
-            )
-            index_to_keep = np.intersect1d(
-                index_to_keep, index_to_keep6, assume_unique=True
-            )
-
-            # keep only relevant atoms
-            if len(index_to_keep) > 0:
-                pdb = pdb.selections.create_molecule_from_selection(index_to_keep)
-
-            # get the vdw radii of each protein atom
-            vdw = np.ones(len(pdb.information.coordinates))  # so the default vdw is 1.0
-
-            # get vdw... you might want to fill this out with additional vdw
-            # values
-            vdw[
-                np.nonzero(
-                    pdb.information.atom_information["element_stripped"] == b"H"
-                )[0]
-            ] = 1.2
-            vdw[
-                np.nonzero(
-                    pdb.information.atom_information["element_stripped"] == b"C"
-                )[0]
-            ] = 1.7
-            vdw[
-                np.nonzero(
-                    pdb.information.atom_information["element_stripped"] == b"N"
-                )[0]
-            ] = 1.55
-            vdw[
-                np.nonzero(
-                    pdb.information.atom_information["element_stripped"] == b"O"
-                )[0]
-            ] = 1.52
-            vdw[
-                np.nonzero(
-                    pdb.information.atom_information["element_stripped"] == b"F"
-                )[0]
-            ] = 1.47
-            vdw[
-                np.nonzero(
-                    pdb.information.atom_information["element_stripped"] == b"P"
-                )[0]
-            ] = 1.8
-            vdw[
-                np.nonzero(
-                    pdb.information.atom_information["element_stripped"] == b"S"
-                )[0]
-            ] = 1.8
-            vdw = np.repeat(np.array([vdw]).T, len(pts), axis=1)
-
-            # now identify the points that are close to the protein atoms
-            dists = cdist(pdb.information.coordinates, pts)
-            close_pt_index = np.nonzero((dists < (vdw + config.distance_cutoff)))[1]
-
-            # now keep the appropriate points
-            pts = np.delete(pts, close_pt_index, axis=0)
-
-            # exclude points outside convex hull
-            if config.convex_hull_exclusion:
-                convex_hull_3d = ConvexHull(pts)
-
-                # get the coordinates of the non-hydrogen atoms (faster to discard
-                # hydrogens)
-                hydros = pdb.selections.select_atoms({"element_stripped": [b"H"]})
-                not_hydros = pdb.selections.invert_selection(hydros)
-                not_hydros_coors = pdb.information.coordinates[not_hydros]
-
-                # not_hydros = pdb.selections.select_atoms({'name_stripped':['CA']})
-                # not_hydros_coors = pdb.information.coordinates[not_hydros]
-
-                # modify pts here.
-                # note that the atoms of the pdb frame are in pdb.information.coordinates
-                # begintime = time.time() # measure execution time
-                akl_toussaint_pts = convex_hull_3d.akl_toussaint(
-                    not_hydros_coors
-                )  # quickly reduces input size
-                # print "akl Toussaint:", time.time() - begintime
-                begintime = time.time()  # measure execution time
-                # calculate convex hull using gift wrapping algorithm
-                hull = convex_hull_3d.gift_wrapping_3d(akl_toussaint_pts)
-                # print "gift_wrapping:", time.time() - begintime
-
-                # we will need to regenerate the pts list, disregarding those
-                # outside the hull
-                old_pts = pts
-                pts = []
-                for pt in old_pts:
-                    pt_outside = convex_hull_3d.outside_hull(
-                        pt, hull
-                    )  # check if pt is outside hull
-                    if not pt_outside:
-                        # if its not outside the hull, then include it in the
-                        # volume measurement
-                        pts.append(pt)
-                pts = np.array(pts)
-
-            # Now, enforce contiguity if needed
-            if len(regions_contig) > 0 and len(pts) > 0:
-                # first, for each point, determine how many neighbors it has to
-                # count kiddy-corner points too
-                cutoff_dist = config.grid_spacing * 1.01 * math.sqrt(3)
-                pts_dists = squareform(pdist(pts))
-                # minus 1 because an atom shouldn't be considered its own neighor
-                neighbor_counts = np.sum(pts_dists < cutoff_dist, axis=0) - 1
-
-                # remove all the points that don't have enough neighbors
-                pts = pts[
-                    np.nonzero(neighbor_counts >= config.contiguous_points_criteria)[0]
-                ]
-
-                # get all the points in the defined parameters['ContiguousPocket']
-                # seed regions
-                contig_pts = regions_contig[0].get_points(config.grid_spacing)
-                for Contig in regions_contig[1:]:
-                    contig_pts = np.vstack(
-                        (contig_pts, Contig.get_points(config.grid_spacing))
-                    )
-                contig_pts = unique_rows(contig_pts)
-
-                try:  # error here if there are no points of contiguous seed region outside of protein volume.
-                    # now just get the ones that are not near the protein
-                    contig_pts = pts[np.nonzero(cdist(contig_pts, pts) < 1e-7)[1]]
-
-                    last_size_of_contig_pts = 0
-                    while last_size_of_contig_pts != len(contig_pts):
-                        last_size_of_contig_pts = len(contig_pts)
-
-                        # now get the indices of all points that are close to the
-                        # contig_pts
-                        all_pts_close_to_contig_pts_boolean = (
-                            cdist(pts, contig_pts) < cutoff_dist
-                        )
-                        index_all_pts_close_to_contig_pts = np.unique(
-                            np.nonzero(all_pts_close_to_contig_pts_boolean)[0]
-                        )
-                        contig_pts = pts[index_all_pts_close_to_contig_pts]
-
-                    pts = contig_pts
-                except Exception:
-                    logger.exception(
-                        "Frame "
-                        + str(frame_indx)
-                        + ": None of the points in the contiguous-pocket seed region\n\t\tare outside the volume of the protein! Assuming a pocket\n\t\tvolume of 0.0 A."
-                    )
-                    pts = np.array([])
-
-            # now write the pdb and calculate the volume
-            volume = len(pts) * math.pow(config.grid_spacing, 3)
-
-            logger.info("\tFrame " + str(frame_indx) + ": " + repr(volume) + " A^3")
-            if config.save_individual_pocket_volumes:
-                frame_text = f"REMARK Frame {str(frame_indx)}" + "\n"
-                frame_text += f"REMARK Volume = {repr(volume)}" + " Cubic Angstroms\n"
-                frame_text += numpy_to_pdb(pts, "X")
-
-                if config.output_equal_num_points_per_frame:
-                    # you need to find the points that are in pts_deleted but not
-                    # in pts
-                    tmp = reduce(
-                        lambda x, y: x | np.all(pts_deleted == y, axis=-1),
-                        pts,
-                        np.zeros(pts_deleted.shape[:1], dtype=np.bool),
-                    )
-                    indices = np.where(tmp)[0]
-                    pts_deleted = np.delete(pts_deleted, indices, axis=0)
-
-                    # So extra points will always be at the origin. These can be
-                    # easily hidden with your visualization software.
-                    pts_deleted = np.zeros(pts_deleted.shape)
-                    frame_text = frame_text + numpy_to_pdb(pts_deleted, "X", "XXX")
-
-                frame_text = frame_text + "END\n"
-
-                if config.compress_output:
-                    fl = gzopenfile(
-                        output_prefix + "frame_" + str(frame_indx) + ".pdb.gz",
-                        "wb",
-                    )
-                else:
-                    fl = openfile(
-                        output_prefix + "frame_" + str(frame_indx) + ".pdb",
-                        "w",
-                    )
-                write_to_file(fl, frame_text, encode=config.compress_output)
-                fl.close()
-
-            extra_data_to_add = {}
-            if config.save_volumetric_density_map:
-                extra_data_to_add["SaveVolumetricDensityMap"] = pts
-
-            return (frame_indx, volume, extra_data_to_add)
-
+            return ConvexHull.volume(*item)
         except Exception as e:
-            logger.exception(f"Error in frame {frame_indx}: {e}")
+            logger.exception(f"Error in frame {item[0]}: {e}")
             return ("error", str(e))
