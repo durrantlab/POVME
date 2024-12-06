@@ -1,179 +1,322 @@
-from typing import Any
+"""
+Parallel Computation Module using Ray
 
-import multiprocessing
-import platform
+This module provides tools to efficiently parallelize and manage computational tasks
+using Ray, a high-performance distributed execution framework. It is designed to
+facilitate the distribution of workloads across multiple CPU cores or machines,
+thereby accelerating processing times for large-scale data or compute-intensive
+operations.
+
+## Usage
+
+1. **Define a Task Class**
+
+    Subclass `RayTaskGeneral` and implement the `process_item` method with the desired computation.
+
+    ```python
+    class MyTask(RayTaskGeneral):
+        def process_item(self, item):
+            # Implement the computation
+            return item * 2  # Example operation
+    ```
+
+2. **Initialize Ray and RayManager**
+
+    ```python
+    import ray
+    from your_module import RayManager, MyTask
+
+    ray.init()  # Initialize Ray
+
+    manager = RayManager(task_class=MyTask, n_cores=4)  # Use 4 cores
+    ```
+
+3. **Submit Tasks**
+
+    ```python
+    items_to_process = [1, 2, 3, 4, 5]
+
+    def save_results(results, **kwargs):
+        # Implement saving logic, e.g., write to a file or database
+        print("Saving results:", results)
+
+    manager.submit_tasks(
+        items=items_to_process,
+        chunk_size=2,
+        save_func=save_results,
+        save_kwargs={'destination': 'output.txt'},
+        save_interval=2
+    )
+    ```
+
+4. **Retrieve Results**
+
+    ```python
+    all_results = manager.get_results()
+    print("All Results:", all_results)
+    ```
+
+## Notes
+
+The `RayManager` handles task submission and result collection efficiently by
+maintaining a pool of worker futures up to the specified number of cores.
+The `save_func` allows for intermediate saving of results, which is useful for
+long-running tasks to prevent data loss and manage memory usage.
+Exception handling is incorporated to ensure that individual task failures do not
+halt the entire processing pipeline. Errors are logged and returned as part of
+the results for further inspection.
 
 
-class MultiThreading:
-    """A class for running calculations on multiple processors."""
+"""
 
-    results: list[Any] = []
+from typing import Any, Generator
 
-    def __init__(self, inputs, num_processors, task_class):
-        """Launches a calculation on multiple processors.
+from abc import ABC, abstractmethod
+from collections.abc import Callable
+
+import ray
+from loguru import logger
+
+
+@ray.remote
+def ray_worker(task_class: Callable[[], Any], item: Any) -> Any:
+    """
+    Remote function to process a single item using the provided task class.
+
+    Args:
+        task_class (Callable[[], Any]): A callable that returns an instance with a `run` method.
+        item (Any): The input data required for the calculation.
+
+    Returns:
+        Any: The result of the `run` method or an error tuple.
+    """
+    task_instance = task_class()
+    result = task_instance.run(item)
+    return result
+
+
+class RayManager:
+    """
+    A manager class for handling task submissions and result collection using Ray's Task Parallelism.
+    """
+
+    def __init__(
+        self, task_class: Callable[[], Any], n_cores: int = -1, use_ray: bool = False
+    ) -> None:
+        """Initializes the RayManager.
 
         Args:
-            inputs: A list, containing all the input required for the
-                calculation.
-            num_processors: An integer, the requested number of processors to
-                use.
-            task_class: An class, the class governing what calculations will be
-                run on a given thread.
+            task_class: A callable that returns an instance with a `run` method for
+                processing each item.
+            n_cores: Number of parallel tasks to run. If <= 0, uses all available CPUs.
+            use_ray: Flag to determine if Ray should be used. If False, runs tasks sequentially.
+        """
+        self.task_class = task_class
+        """
+        A callable that returns an instance with a `run` method for
+        processing each item.
+        """
+
+        self.use_ray = use_ray
+        """
+        Flag to determine if Ray should be used. If False, runs tasks sequentially.
+        """
+
+        self.n_cores = (
+            n_cores if n_cores > 0 else int(ray.available_resources().get("CPU", 1))
+        )
+        """
+        The number of parallel tasks to run. If set to `-1` or any value less than or
+        equal to `0`, all available CPU cores are utilized.
+        """
+
+        self.futures: list[ray.ObjectRef] = []
+        """
+        A list of Ray object references representing the currently submitted but
+        not yet completed tasks. This manages the pool of active workers.
+        """
+
+        self.results: list[Any] = []
+        """
+        A list that stores the results of all completed tasks. It aggregates the
+        output returned by each worker.
+        """
+
+        self.save_func: Callable[[Any, Any], None] | None = None
+        """
+        An optional callable function that takes a batch of results and performs a
+        save operation. This can be used to persist intermediate results to
+        disk, a database, or any other storage medium. If set to `None`, results are
+        not saved automatically.
+        """
+
+        self.save_interval: int = 1
+        """
+        The number of results to accumulate before invoking `save_func`.
+        When the number of collected results reaches this interval,
+        `save_func` is called to handle the batch of results.
+        """
+
+        self.save_kwargs: dict[str, Any] = dict()
+        """
+        A dictionary of additional keyword arguments to pass to
+        `save_func` when it is called. This allows for flexible configuration of the
+        save operation, such as specifying file paths,
+        database connections, or other parameters required by `save_func`.
+        """
+
+    def task_generator(
+        self, items: list[Any], chunk_size: int
+    ) -> Generator[Any, None, None]:
+        """Generator that yields individual items from chunks.
+
+        Args:
+            items: A list of items to process.
+            chunk_size: Number of items per chunk.
+
+        Yields:
+            Individual items to be processed.
+        """
+        for start in range(0, len(items), chunk_size):
+            end = min(start + chunk_size, len(items))
+            chunk = items[start:end]
+            logger.info(f"Yielding tasks {start} to {end - 1}")
+            for item in chunk:
+                yield item
+
+    def submit_tasks(
+        self,
+        items: list[Any],
+        chunk_size: int = 100,
+        save_func: Callable[[Any, Any], None] | None = None,
+        save_kwargs: dict[str, Any] = dict(),
+        save_interval: int = 100,
+    ) -> None:
+        """Submits tasks using a generator and manages workers up to n_cores.
+
+        Args:
+            items: A list of items to process.
+            chunk_size: Number of items per chunk.
+            save_func: A callable that takes a list of results and saves them.
+            save_interval: The number of results after which to invoke save_func.
+        """
+        self.save_func = save_func
+        self.save_kwargs = save_kwargs
+        self.save_interval = save_interval
+
+        task_gen = self.task_generator(items, chunk_size)
+
+        if self.use_ray:
+            self._submit_ray(task_gen)
+        else:
+            self._submit(task_gen)
+
+    def _submit(self, task_gen: Generator[Any, None, None]) -> None:
+        """Handles task submission and result collection sequentially.
+
+        Args:
+            task_gen: Generator yielding tasks to process.
+        """
+        results = []
+        for item in task_gen:
+            result = self.task_class().run(item)
+            results.append(result)
+
+            if self.save_func and len(results) >= self.save_interval:
+                self.save_func(results[: self.save_interval], **self.save_kwargs)
+                self.results.extend(results)
+                results = results[self.save_interval :]
+
+        if self.save_func and results:
+            self.save_func(results, **self.save_kwargs)
+        self.results.extend(results)
+
+    def _submit_ray(self, task_gen: Generator[Any, None, None]) -> None:
+        """Handles task submission and result collection using Ray.
+
+        Args:
+            task_gen: Generator yielding tasks to process.
+        """
+        if not ray.is_initialized():
+            ray.init()
+
+        results = []
+        for item in task_gen:
+            if len(self.futures) >= self.n_cores:
+                # Wait for any worker to finish
+                done_futures, self.futures = ray.wait(self.futures, num_returns=1)
+                result = ray.get(done_futures[0])
+                results.append(result)
+
+                if self.save_func and len(results) >= self.save_interval:
+                    self.save_func(results[: self.save_interval], **self.save_kwargs)
+                    self.results.extend(results)
+                    results = results[self.save_interval :]
+
+            # Submit new task to Ray
+            future = ray_worker.remote(self.task_class, item)
+            self.futures.append(future)
+
+        # Collect remaining Ray futures
+        while self.futures:
+            done_futures, self.futures = ray.wait(self.futures, num_returns=1)
+            result = ray.get(done_futures[0])
+            results.append(result)
+
+            if self.save_func and len(results) >= self.save_interval:
+                self.save_func(results[: self.save_interval], **self.save_kwargs)
+                self.results.extend(results)
+                results = results[self.save_interval :]
+
+        if self.save_func and results:
+            self.save_func(results, **self.save_kwargs)
+        self.results.extend(results)
+
+    def get_results(self) -> list[Any]:
+        """
+        Retrieves all collected results.
 
         Returns:
-            Nothing, though the objects self.results list is populated with the
-                calculation results
-
+            A list of results from all completed tasks.
         """
-
-        self.results = []
-
-        # If it's windows, you can only use one processor.
-        if num_processors != 1 and (
-            platform.system().upper()[:3] == "WIN" or "NT" in platform.system().upper()
-        ):
-            print(
-                "WARNING: Use of multiple processors is not supported in Windows. Proceeding with one processor..."
-            )
-            num_processors = 1
-
-        if num_processors == 1:  # so just running on 1 processor, perhaps under windows
-            single_thread = task_class()
-            single_thread.total_num_tasks = len(inputs)
-
-            single_thread.results = []
-            for item in inputs:
-                single_thread.value_func(item, None)
-
-            self.results = single_thread.results
-
-        else:  # so it actually is running on multiple processors
-
-            cpu_count = 1
-            cpu_count = multiprocessing.cpu_count()
-
-            # first, if num_processors <= 0, determine the number of
-            # processors to use programatically
-            if num_processors <= 0:
-                num_processors = cpu_count
-
-            # reduce the number of processors if too many have been specified
-            if len(inputs) < num_processors:
-                num_processors = len(inputs)
-
-            # if there are no inputs, there's nothing to do.
-            if len(inputs) == 0:
-                self.results = []
-                return
-
-            # now, divide the inputs into the appropriate number of processors
-            inputs_divided = {t: [] for t in range(num_processors)}
-            for t in range(0, len(inputs), num_processors):
-                for t2 in range(num_processors):
-                    index = t + t2
-                    if index < len(inputs):
-                        inputs_divided[t2].append(inputs[index])
-
-            # now, run each division on its own processor
-            running = multiprocessing.Value("i", num_processors)
-            mutex = multiprocessing.Lock()
-
-            arrays = []
-            threads = []
-            for _ in range(num_processors):
-                athread = task_class()
-                athread.total_num_tasks = len(inputs)
-
-                threads.append(athread)
-                arrays.append(multiprocessing.Array("i", [0, 1]))
-
-            results_queue = multiprocessing.Queue()  # to keep track of the results
-
-            processes = []
-            for i in range(num_processors):
-                p = multiprocessing.Process(
-                    target=threads[i].runit,
-                    args=(running, mutex, results_queue, inputs_divided[i]),
-                )
-                p.start()
-                processes.append(p)
-
-            is_running = 0  # wait for everything to finish
-
-            while running.value > 0:
-                pass
-            # compile all results into one list
-            for _ in threads:
-                chunk = results_queue.get()
-                self.results.extend(chunk)
+        return self.results
 
 
-class MultithreadingTaskGeneral:
+class RayTaskGeneral(ABC):
     """A parent class of others that governs what calculations are run on each
-    thread"""
+    task."""
 
-    results: list[Any] = []
+    def __init__(self):
+        self.results: list[Any] = []
 
-    def runit(self, running, mutex, results_queue, items):
-        """Launches the calculations on this thread
+    def run(self, item: Any) -> Any:
+        """Processes a single item.
 
-        Args:
-            running: A multiprocessing.Value object.
-            mutex: A multiprocessing.Lock object.
-            results_queue: A multiprocessing.Queue() object for storing the
-                calculation output.
-            items: A list, the input data required for the calculation.
-
-        """
-
-        for item in items:
-            self.value_func(item, results_queue)
-
-        mutex.acquire()
-        running.value -= 1
-        mutex.release()
-        results_queue.put(self.results)
-
-    def value_func(self, item, results_queue):  # so overwriting this function
-        """The definition that actually does the work.
+        This method wraps the `process_item` method with a try-except block.
 
         Args:
-            item: A list or tuple, the input data required for the calculation.
-            results_queue: A multiprocessing.Queue() object for storing the
-                calculation output.
+            item: The input data required for the calculation.
 
+        Returns:
+            The result of the calculation or an error tuple.
         """
+        try:
+            result = self.process_item(item)
+            return result
+        except Exception as e:
+            logger.exception(f"Error processing item {item}: {e}")
+            return ("error", str(e))
 
-        # input1 = item[0]
-        # input2 = item[1]
-        # input3 = item[2]
-        # input4 = item[3]
-        # input5 = item[4]
-        # input6 = item[5]
+    @abstractmethod
+    def process_item(self, item: Any) -> Any:
+        """The definition that computes or processes a single item.
 
-        # use inputs to come up with a result, some_result
+        This method should be implemented by subclasses to define the specific
+        processing logic for each item.
 
-        # self.results.append(some_result)
+        Args:
+            item: The input data required for the calculation.
 
-        pass
-
-
-class GeneralTask:
-    """A class that determines the specific calculations that will be
-    performed when multi-processor support is used. Other, more
-    specific classes will inherit this one."""
-
-    results = []
-
-    def runit(self, running, mutex, results_queue, items):
-        for item in items:
-            self.value_func(item, results_queue)
-        mutex.acquire()
-        running.value -= 1
-        mutex.release()
-        results_queue.put(self.results)
-
-    # this is the function that changes through inheritance
-    def value_func(self, item, results_queue):
-        print(item)  # here's where you do something
-        self.results.append(item)  # here save the results for later compilation
+        Returns:
+            Any: The result of processing the item.
+        """

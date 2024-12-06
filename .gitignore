@@ -16,3 +16,6 @@ __pycache__
 .coverage
 coverage.xml
 report.xml
+
+# Scalene
+profile*

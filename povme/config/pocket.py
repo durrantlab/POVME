@@ -1,7 +1,7 @@
 from loguru import logger
 from pydantic import BaseModel
 
-from .io import YamlIO
+from povme.config.io import YamlIO
 
 
 class PocketIDConfig(BaseModel, YamlIO):
@@ -22,6 +22,9 @@ class PocketIDConfig(BaseModel, YamlIO):
 
     sphere_padding: float = 5.0
     """How much larger the radius of the inclusion spheres should be, beyond what is required to encompass the identified pockets."""
+
+    use_ray: bool = False
+    """Parallelize computations with ray."""
 
     n_cores: int = 1
     """The number of processors to use."""

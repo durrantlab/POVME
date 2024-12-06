@@ -6,10 +6,10 @@ from pymolecule import Molecule
 from scipy.cluster.vq import kmeans2
 from scipy.spatial.distance import cdist
 
-from .config import PocketIDConfig
-from .hull import ConvexHull
-from .io import openfile, write_pdbs
-from .pocket import BoxOfPoints
+from povme.config import PocketIDConfig
+from povme.io import openfile, write_pdbs
+from povme.points import GridMesh
+from povme.points.hull import ConvexHull
 
 
 class PocketDetector:
@@ -41,19 +41,19 @@ class PocketDetector:
 
         # Step 1: Load in the protein
 
-        logger.info("Step 1. Loading the PDB file " + path_pdb + "...")
+        logger.info("Loading the PDB file " + path_pdb + "...")
         molecule = Molecule()
         molecule.io.load_pdb_into(path_pdb)
 
         # Step 2: Get rid of hydogen atoms. They just slow stuff down.
 
-        print("Step 2. Removing hydrogen atoms...")
+        print("Removing hydrogen atoms...")
         sel = molecule.selections.select_atoms({"element_stripped": b"H"})
         sel = molecule.selections.invert_selection(sel)
         molecule = molecule.selections.get_molecule_from_selection(sel)
 
         # Step 3: Calculate the convex hull of the protein alpha carbons.
-        print("Step 3. Calculating the convex hull of the PDB file...")
+        print("Calculating the convex hull of the PDB file...")
 
         # Get a version of the protein with just the alpha carbons. In my
         # experience, that's better for convex hull identification. Otherwise the
@@ -70,14 +70,14 @@ class PocketDetector:
         # class as well to manipulate the points of this box.
 
         logger.info(
-            "Step 4. Making a box of points spaced "
+            "Making a box of points spaced "
             + str(config.pocket_detection_resolution)
             + " A apart that entirely encompasses the protein..."
         )
 
         # note that the initial box is low resolution (* 4) so convex hull will be
         # very fast
-        box_pts = BoxOfPoints(
+        box_pts = GridMesh(
             molecule.information.get_bounding_box(),
             config.pocket_detection_resolution * 4,
         )
@@ -85,9 +85,7 @@ class PocketDetector:
         # Step 5. Remove points outside the convex hull. Gradually fill in
         # protein-occupying region with denser point fields. Faster this way, I
         # think.
-        logger.info(
-            "Step 5. Removing points that fall outside the protein's convex hull..."
-        )
+        logger.info("Removing points that fall outside the protein's convex hull...")
         box_pts.remove_points_outside_convex_hull(convex_hull_3d, config)
         box_pts.expand_around_existing_points(2, config.pocket_detection_resolution * 2)
         box_pts.remove_points_outside_convex_hull(convex_hull_3d, config)
@@ -98,7 +96,7 @@ class PocketDetector:
         # atoms. For simplicity's sake, don't worry about atomic radii. Just a
         # simple cutoff.
         logger.info(
-            "Step 6. Removing points that come within "
+            "Removing points that come within "
             + str(config.clashing_cutoff)
             + " A of any protein atom..."
         )
@@ -111,19 +109,19 @@ class PocketDetector:
         # the identified pockets.
         if config.pocket_measuring_resolution != config.pocket_detection_resolution:
             logger.info(
-                "Step 7. Flooding the identified pockets with points spaced "
+                "Flooding the identified pockets with points spaced "
                 + str(config.pocket_measuring_resolution)
                 + " A apart for a more detailed measurement of the pocket volume..."
             )
-            print("\tAdding points...")
+            print("Adding points...")
             box_pts.expand_around_existing_points(
                 config.pocket_detection_resolution / config.pocket_measuring_resolution,
                 config.pocket_measuring_resolution,
             )
-            logger.info("\tRemoving points that fall outside the convex hull...")
+            logger.info("Removing points that fall outside the convex hull...")
             box_pts.remove_points_outside_convex_hull(convex_hull_3d, config)
             logger.info(
-                "\tRemoving points within "
+                "Removing points within "
                 + str(config.clashing_cutoff)
                 + " A of any protein atom..."
             )
@@ -135,7 +133,7 @@ class PocketDetector:
         # change). Don't know if this is a high pass or low pass filter. I've
         # heard these terms, though, and they sound cool.
         logger.info(
-            "Step 8. Removing points until all points have at least "
+            "Removing points until all points have at least "
             + str(config.n_neighbors)
             + " neighbors..."
         )
@@ -144,12 +142,12 @@ class PocketDetector:
         )
 
         # Step 9. Separate out the pockets so they can be considered in isolation.
-        logger.info("Step 9. Partitioning the remaining points by pocket...")
+        logger.info("Partitioning the remaining points by pocket...")
         all_pockets = box_pts.separate_out_pockets()
 
         # Step 10. Get povme spheres that encompass each pocket, write pockets to
         # separate pdb files
-        logger.info("Step 10. Saving the points of each pocket...")
+        logger.info("Saving the points of each pocket...")
         let_ids = [
             "A",
             "B",
@@ -215,7 +213,7 @@ class PocketDetector:
                     pts_string = pts_string + write_some_pdbs.numpy_to_pdb(
                         cluster_pts, let_ids[cluster_num]
                     )
-                except:
+                except Exception:
                     logger.info(
                         "There was an error, but I don't think it was catastrophic. Could be that one of the pocket clusters was empty."
                     )

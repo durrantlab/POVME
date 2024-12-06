@@ -2,7 +2,7 @@ import glob
 import os
 import shutil
 
-from povme import PocketDetector
+from povme.pocket.detect import PocketDetector
 
 
 def test_pocket_detect_rofgp2(path_rogfp2_pdb, path_rogfp2_config, path_rogfp2_output):

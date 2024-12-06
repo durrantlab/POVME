@@ -6,10 +6,6 @@ from ast import literal_eval
 
 from loguru import logger
 
-from .pocket_id import PocketDetector
-from .povme import POVME
-
-__all__ = ["POVME", "PocketDetector"]
 __version__ = "2.2.2"
 
 logger.disable("povme")

@@ -5,7 +5,7 @@ from pathlib import Path, PureWindowsPath
 import numpy as np
 import numpy.typing as npt
 
-from .config import POVMEConfig
+from povme.config import POVMEConfig
 
 
 def fix_filename(path: str, must_exist: bool = True) -> Path:
