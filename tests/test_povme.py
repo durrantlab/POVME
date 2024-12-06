@@ -23,5 +23,6 @@ def test_4nss(path_4nss_config, path_4nss_output):
         raise Exception("Expected 11 output files, but got " + str(num_output_files))
 
 # For profiling
+# For example (while in repo root): scalene --profile-all ./tests/test_povme.py
 if __name__ == "__main__":
     test_4nss("tests/files/4nss/povme.yml", "tests/tmp/4nss/")
