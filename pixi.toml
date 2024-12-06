@@ -87,4 +87,4 @@ mkdocs-awesome-pages-plugin = ">=2.9.3,<3"
 
 [feature.docs.tasks]
 docs = { cmd = ["rm", "-rf", "./public/", "&&", "mkdocs", "build", "-d", "public/"] }
-serve = { cmd = ["mkdocs", "serve"] }
+serve-docs = { cmd = ["mkdocs", "serve"] }

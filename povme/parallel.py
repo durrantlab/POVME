@@ -1,4 +1,76 @@
+"""
+Parallel Computation Module using Ray
+
+This module provides tools to efficiently parallelize and manage computational tasks
+using Ray, a high-performance distributed execution framework. It is designed to
+facilitate the distribution of workloads across multiple CPU cores or machines,
+thereby accelerating processing times for large-scale data or compute-intensive
+operations.
+
+## Usage
+
+1. **Define a Task Class**
+
+    Subclass `RayTaskGeneral` and implement the `process_item` method with the desired computation.
+
+    ```python
+    class MyTask(RayTaskGeneral):
+        def process_item(self, item):
+            # Implement the computation
+            return item * 2  # Example operation
+    ```
+
+2. **Initialize Ray and RayManager**
+
+    ```python
+    import ray
+    from your_module import RayManager, MyTask
+
+    ray.init()  # Initialize Ray
+
+    manager = RayManager(task_class=MyTask, n_cores=4)  # Use 4 cores
+    ```
+
+3. **Submit Tasks**
+
+    ```python
+    items_to_process = [1, 2, 3, 4, 5]
+
+    def save_results(results, **kwargs):
+        # Implement saving logic, e.g., write to a file or database
+        print("Saving results:", results)
+
+    manager.submit_tasks(
+        items=items_to_process,
+        chunk_size=2,
+        save_func=save_results,
+        save_kwargs={'destination': 'output.txt'},
+        save_interval=2
+    )
+    ```
+
+4. **Retrieve Results**
+
+    ```python
+    all_results = manager.get_results()
+    print("All Results:", all_results)
+    ```
+
+## Notes
+
+The `RayManager` handles task submission and result collection efficiently by
+maintaining a pool of worker futures up to the specified number of cores.
+The `save_func` allows for intermediate saving of results, which is useful for
+long-running tasks to prevent data loss and manage memory usage.
+Exception handling is incorporated to ensure that individual task failures do not
+halt the entire processing pipeline. Errors are logged and returned as part of
+the results for further inspection.
+
+
+"""
+
 from typing import Any, Generator
+from abc import ABC, abstractmethod
 
 from collections.abc import Callable
 
@@ -12,18 +84,15 @@ def ray_worker(task_class: Callable[[], Any], item: Any) -> Any:
     Remote function to process a single item using the provided task class.
 
     Args:
-        task_class: A callable that returns an instance with a `run` method.
-        item: The input data required for the calculation.
+        task_class (Callable[[], Any]): A callable that returns an instance with a `run` method.
+        item (Any): The input data required for the calculation.
 
     Returns:
-        The result of the `run` method or an error tuple.
+        Any: The result of the `run` method or an error tuple.
     """
-    try:
-        task_instance = task_class()
-        result = task_instance.run(item)
-        return result
-    except Exception as e:
-        return ("error", str(e))
+    task_instance = task_class()
+    result = task_instance.run(item)
+    return result
 
 
 class RayManager:
@@ -35,17 +104,58 @@ class RayManager:
         """Initializes the RayManager.
 
         Args:
-            task_class: A callable that returns an instance with a `run` method.
-            n_cores: Number of parallel tasks to run. If <=0, uses all available CPUs.
+            task_class: A callable that returns an instance with a `run` method for
+                processing each item.
+            n_cores: Number of parallel tasks to run. If <= 0, uses all available CPUs.
         """
         self.task_class = task_class
+        """
+        A callable that returns an instance with a `run` method for
+        processing each item.
+        """
+
         self.n_cores = (
             n_cores if n_cores > 0 else int(ray.available_resources().get("CPU", 1))
         )
+        """
+        The number of parallel tasks to run. If set to `-1` or any value less than or
+        equal to `0`, all available CPU cores are utilized.
+        """
+
         self.futures: list[ray.ObjectRef] = []
+        """
+        A list of Ray object references representing the currently submitted but
+        not yet completed tasks. This manages the pool of active workers.
+        """
+
         self.results: list[Any] = []
-        self.save_func: Callable[[Any, ...], None] | None = None
+        """
+        A list that stores the results of all completed tasks. It aggregates the
+        output returned by each worker.
+        """
+
+        self.save_func: Callable[[Any, Any], None] | None = None
+        """
+        An optional callable function that takes a batch of results and performs a
+        save operation. This can be used to persist intermediate results to
+        disk, a database, or any other storage medium. If set to `None`, results are
+        not saved automatically.
+        """
+
         self.save_interval: int = 1
+        """
+        The number of results to accumulate before invoking `save_func`.
+        When the number of collected results reaches this interval,
+        `save_func` is called to handle the batch of results.
+        """
+
+        self.save_kwargs: dict[str, Any] = dict()
+        """
+        A dictionary of additional keyword arguments to pass to
+        `save_func` when it is called. This allows for flexible configuration of the
+        save operation, such as specifying file paths,
+        database connections, or other parameters required by `save_func`.
+        """
 
     def task_generator(
         self, items: list[Any], chunk_size: int
@@ -70,7 +180,7 @@ class RayManager:
         self,
         items: list[Any],
         chunk_size: int = 100,
-        save_func: Callable[[Any, ...], None] | None = None,
+        save_func: Callable[[Any, Any], None] | None = None,
         save_kwargs: dict[str, Any] = dict(),
         save_interval: int = 100,
     ) -> None:
@@ -133,29 +243,41 @@ class RayManager:
         return self.results
 
 
-class RayTaskGeneral:
+class RayTaskGeneral(ABC):
     """A parent class of others that governs what calculations are run on each
     task."""
 
     def __init__(self):
         self.results: list[Any] = []
 
-    def run(self, item):
+    def run(self, item: Any) -> Any:
         """Processes a single item.
+
+        This method wraps the `process_item` method with a try-except block.
 
         Args:
             item: The input data required for the calculation.
 
         Returns:
-            The result of the calculation.
+            The result of the calculation or an error tuple.
         """
         try:
-            result = self.value_func(item)
+            result = self.process_item(item)
             return result
         except Exception as e:
             logger.exception(f"Error processing item {item}: {e}")
             return ("error", str(e))
 
-    def value_func(self, item):
-        """The definition that actually does the work."""
-        pass
+    @abstractmethod
+    def process_item(self, item: Any) -> Any:
+        """The definition that computes or processes a single item.
+
+        This method should be implemented by subclasses to define the specific
+        processing logic for each item.
+
+        Args:
+            item: The input data required for the calculation.
+
+        Returns:
+            Any: The result of processing the item.
+        """

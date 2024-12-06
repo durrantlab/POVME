@@ -10,8 +10,8 @@ from loguru import logger
 from pymolecule import Molecule
 from scipy.spatial.distance import cdist, pdist, squareform
 
-from ..io import gzopenfile, numpy_to_pdb, openfile, write_to_file
-from ..parallel import RayTaskGeneral
+from povme.io import gzopenfile, numpy_to_pdb, openfile, write_to_file
+from povme.parallel import RayTaskGeneral
 
 
 def unique_rows(a):
@@ -602,7 +602,7 @@ class ConvexHull:
 class TaskCalcVolume(RayTaskGeneral):
     """A class for calculating the volume."""
 
-    def value_func(self, item):
+    def process_item(self, item):
         """Calculate the volume.
 
         Args:

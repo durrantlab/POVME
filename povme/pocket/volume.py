@@ -12,39 +12,12 @@ from loguru import logger
 from pymolecule import Molecule
 from scipy.spatial.distance import cdist
 
-from .config import POVMEConfig
-from .io import dx_freq, gzopenfile, numpy_to_pdb, openfile, write_to_file
-from .parallel import RayManager, RayTaskGeneral
-from .points.hull import ConvexHull
-from .points.regions import collect_regions
-
-
-def init_vol_csv(output_prefix: str) -> None:
-    csv_filename = f"{output_prefix}volumes.csv"
-    if not os.path.exists(csv_filename):
-        with open(csv_filename, mode="w", newline="") as csv_file:
-            writer = csv.writer(csv_file)
-            writer.writerow(["frame_idx", "volume"])
-        logger.info(f"Initialized CSV file with headers: {csv_filename}")
-
-
-def write_vol_csv(results_vol: list[tuple[int, float]], output_prefix: str) -> None:
-    """
-    Append frame indices and volumes to a CSV file.
-
-    Args:
-        results_vol: A list of tuples, each containing (frame_idx, volume).
-        output_prefix: Path to the directory where the CSV file will be saved.
-    """
-    csv_filename = os.path.join(output_prefix, "volumes.csv")
-    file_exists = os.path.isfile(csv_filename)
-
-    with open(csv_filename, mode="a", newline="") as csv_file:
-        writer = csv.writer(csv_file)
-        if not file_exists:
-            writer.writerow(["frame_idx", "volume"])
-        for result in results_vol:
-            writer.writerow([result[0], result[1]])
+from povme.config import POVMEConfig
+from povme.io import dx_freq, gzopenfile, numpy_to_pdb, openfile, write_to_file
+from povme.parallel import RayManager, RayTaskGeneral
+from povme.pocket.savers import init_vol_csv, write_vol_csv
+from povme.points.hull import ConvexHull
+from povme.points.regions import collect_regions
 
 
 def get_unique_rows(a):
@@ -132,7 +105,7 @@ def collect_pdb_frames_in_chunks(
 
 class TaskComputeVolumeFromPDBLines(RayTaskGeneral):
 
-    def value_func(self, item: tuple[Any, ...]) -> tuple[Any, ...]:
+    def process_item(self, item: tuple[Any, ...]) -> tuple[Any, ...]:
         frame_index, pdb_string, config, pts, regions_contig, output_prefix = item
 
         # Load the PDB from lines
@@ -151,7 +124,7 @@ class TaskComputeVolumeFromPDBLines(RayTaskGeneral):
             return ("error", str(e))
 
 
-class POVME:
+class PocketVolume:
     """The main class to run POVME."""
 
     def __init__(

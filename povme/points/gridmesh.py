@@ -5,15 +5,15 @@ import numpy.typing as npt
 from loguru import logger
 from scipy import spatial
 
-from ..config import POVMEConfig
-from ..io import write_pdbs
-from ..parallel import RayManager, RayTaskGeneral
+from povme.config import POVMEConfig
+from povme.io import write_pdbs
+from povme.parallel import RayManager, RayTaskGeneral
 
 
 class TaskRemovePointsOutsideHull(RayTaskGeneral):
     """A class to remove points outside a convex hull using multiple processors."""
 
-    def value_func(
+    def process_item(
         self, item: tuple[Any, npt.NDArray[np.float64]]
     ) -> npt.NDArray[np.float64]:
         """Removes points outside the convex hull.
@@ -38,7 +38,7 @@ class TaskRemovePointsOutsideHull(RayTaskGeneral):
 class TaskGetClosePoints(RayTaskGeneral):
     """A class to identify box points that are near other, user-specified points."""
 
-    def value_func(
+    def process_item(
         self, item: tuple[spatial.KDTree, float, npt.NDArray[np.float64]]
     ) -> npt.NDArray[np.float64]:
         """Identifies indices of box points close to other points.

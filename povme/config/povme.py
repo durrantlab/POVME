@@ -1,7 +1,7 @@
 from loguru import logger
 from pydantic import BaseModel
 
-from .io import YamlIO
+from povme.config.io import YamlIO
 
 
 class POVMEConfig(BaseModel, YamlIO):
