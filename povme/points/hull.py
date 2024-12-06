@@ -9,7 +9,7 @@ from pymolecule import Molecule
 from scipy.spatial.distance import cdist, pdist, squareform
 
 from ..io import gzopenfile, numpy_to_pdb, openfile, write_to_file
-from ..parallel import MultiprocessingTaskGeneral
+from ..parallel import RayTaskGeneral
 
 
 def unique_rows(a):
@@ -371,7 +371,7 @@ class ConvexHull:
         return not self.outside_hull(our_point, self.hull)
 
 
-class MultiprocessingCalcVolumeTask(MultiprocessingTaskGeneral):
+class TaskCalcVolume(RayTaskGeneral):
     """A class for calculating the volume."""
 
     def value_func(self, item):

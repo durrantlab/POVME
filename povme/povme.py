@@ -1,5 +1,6 @@
 from typing import Any
 
+import csv
 import os
 import shutil
 import sys
@@ -12,10 +13,38 @@ from pymolecule import Molecule
 from scipy.spatial.distance import cdist
 
 from .config import POVMEConfig
-from .points.hull import MultiprocessingCalcVolumeTask
 from .io import dx_freq, gzopenfile, numpy_to_pdb, openfile, write_to_file
-from .parallel import MultiprocessingManager, MultiprocessingTaskGeneral
+from .parallel import RayManager, RayTaskGeneral
+from .points.hull import TaskCalcVolume
 from .points.regions import collect_regions
+
+
+def init_vol_csv(output_prefix: str) -> None:
+    csv_filename = f"{output_prefix}volumes.csv"
+    if not os.path.exists(csv_filename):
+        with open(csv_filename, mode="w", newline="") as csv_file:
+            writer = csv.writer(csv_file)
+            writer.writerow(["frame_idx", "volume"])
+        logger.info(f"Initialized CSV file with headers: {csv_filename}")
+
+
+def write_vol_csv(results_vol: list[tuple[int, float]], output_prefix: str) -> None:
+    """
+    Append frame indices and volumes to a CSV file.
+
+    Args:
+        results_vol: A list of tuples, each containing (frame_idx, volume).
+        output_prefix: Path to the directory where the CSV file will be saved.
+    """
+    csv_filename = os.path.join(output_prefix, "volumes.csv")
+    file_exists = os.path.isfile(csv_filename)
+
+    with open(csv_filename, mode="a", newline="") as csv_file:
+        writer = csv.writer(csv_file)
+        if not file_exists:
+            writer.writerow(["frame_idx", "volume"])
+        for result in results_vol:
+            writer.writerow([result[0], result[1]])
 
 
 def get_unique_rows(a):
@@ -34,7 +63,7 @@ def get_unique_rows(a):
     return np.unique(b).view(a.dtype).reshape(-1, a.shape[1])  # unique_a
 
 
-class MultiprocessingStringToMoleculeTask(MultiprocessingTaskGeneral):
+class TaskStringToMolecule(RayTaskGeneral):
     """A class for loading PDB frames (as strings) into pymolecule.Molecule
     objects."""
 
@@ -93,9 +122,11 @@ class POVME:
         if path_config is not None:
             self.config.from_yaml(path_config)
 
-    def load_multi_frame_pdb(self, filename, config):
+    def load_multi_frame_pdb(
+        self, filename: str, config: POVMEConfig
+    ) -> list[tuple[int, Molecule | str]]:
         """Load a multi-frame PDB into memory or into separate files
-        (depending on user specifications).
+        (depending on user specifications.
 
         Args:
             filename: A string, the filename of the multi-frame PDB.
@@ -114,34 +145,38 @@ class POVME:
         pdb_strings = []
         growing_string = ""
 
-        logger.info("Reading frames from " + filename)
+        logger.info(f"Reading frames from {filename}")
 
-        f = open(filename, "rb")
-        while True:
-
-            line = f.readline()
-
-            if len(line) == 0:
+        with open(filename, "rb") as f:
+            for line in f:
+                if line.startswith(b"END"):
+                    if growing_string:
+                        pdb_strings.append(growing_string)
+                    growing_string = ""
+                else:
+                    growing_string += line.decode()
+            # Append the last frame if the file doesn't end with 'END'
+            if growing_string:
                 pdb_strings.append(growing_string)
-                break
-            if line[:3] == b"END":
-                pdb_strings.append(growing_string)
-                growing_string = ""
-            else:
-                growing_string = growing_string + line.decode()
 
-        f.close()
+        # Remove any empty strings
+        pdb_strings = [s for s in pdb_strings if s]
 
-        while "" in pdb_strings:
-            pdb_strings.remove("")
+        logger.info(f"Total frames extracted: {len(pdb_strings)}")
 
-        # now convert each pdb string into a pymolecule.Molecule object
-        manager = MultiprocessingManager(
-            [(pdb_strings[idx], idx + 1, config) for idx in range(len(pdb_strings))],
-            config.n_cores,
-            MultiprocessingStringToMoleculeTask,
+        # Prepare inputs for RayManager
+        inputs = [
+            (pdb_strings[idx], idx + 1, config) for idx in range(len(pdb_strings))
+        ]
+
+        # Initialize RayManager with the updated task class
+        ray_manager = RayManager(
+            task_class=TaskStringToMolecule, n_cores=config.n_cores
         )
-        molecules = manager.results
+        ray_manager.submit_tasks(inputs)
+        molecules = ray_manager.get_results()
+
+        logger.info("Completed processing all frames.")
 
         return molecules
 
@@ -212,7 +247,7 @@ class POVME:
             contig_pts = np.vstack((contig_pts, Contig.get_points(config.grid_spacing)))
         contig_pts = get_unique_rows(contig_pts)
 
-        logger.info("\nSaving the contiguous-pocket seed points as a PDB file")
+        logger.info("Saving the contiguous-pocket seed points as a PDB file")
 
         points_filename = output_prefix + "contiguous_pocket_seed_points.pdb"
 
@@ -235,49 +270,35 @@ class POVME:
         )
 
     def compute_volume(self, path_pdb, pts, regions_contig, output_prefix, config):
-        # load the PDB frames
+        # Load PDB frames
         index_and_pdbs = self.load_multi_frame_pdb(path_pdb, config)
+        if len(index_and_pdbs) == 0:
+            raise RuntimeError("PDB parsing results are nonexistent")
 
-        # calculate all the volumes
-        logger.info("Calculating the pocket volume of each frame")
-        tmp = MultiprocessingManager(
-            [
-                (index, pdb_object, pts, regions_contig, output_prefix, config)
-                for index, pdb_object in index_and_pdbs
-            ],
-            config.n_cores,
-            MultiprocessingCalcVolumeTask,
+        # Prepare inputs
+        inputs = [
+            (index, pdb_object, pts, regions_contig, output_prefix, config)
+            for index, pdb_object in index_and_pdbs
+        ]
+
+        # Initialize RayManager
+        ray_manager = RayManager(task_class=TaskCalcVolume, n_cores=config.n_cores)
+        init_vol_csv(output_prefix)
+        ray_manager.submit_tasks(
+            inputs,
+            save_func=write_vol_csv,
+            save_kwargs={"output_prefix": output_prefix},
         )
+        results = ray_manager.get_results()
+        if len(results) == 0:
+            raise RuntimeError("Volume results are nonexistent")
 
-        # delete the temp swap directory if necessary
+        # Cleanup
         if config.use_disk_not_memory:
             if os.path.exists("./.povme_tmp"):
                 shutil.rmtree("./.povme_tmp")
         logger.info("Execution time = " + str(time.time() - self.t_start) + " sec")
-        return tmp.results
-
-    @staticmethod
-    def write_vol_csv(results_vol, output_prefix, config):
-        if config.compress_output:
-            f = gzopenfile(
-                output_prefix + "volumes.csv.gz",
-                "wb",
-            )
-        else:
-            f = openfile(output_prefix + "volumes.csv", "w")
-
-        write_to_file(
-            f,
-            "frame_idx,volume\n",
-            encode=config.compress_output,
-        )
-        for i in sorted(results_vol.keys()):
-            write_to_file(
-                f,
-                str(i) + "," + str(results_vol[i]) + "\n",
-                encode=config.compress_output,
-            )
-        f.close()
+        return results
 
     @staticmethod
     def write_vol_traj(results_vol, output_prefix, config):
@@ -448,9 +469,6 @@ class POVME:
         results_vol = {}
         for result in results:
             results_vol[result[0]] = result[1]
-
-        # Save volumes to CSV file
-        self.write_vol_csv(results_vol, output_prefix, config)
 
         # if the user wanted a single trajectory containing all the
         # volumes, generate that here.

@@ -6,6 +6,33 @@ from povme import enable_logging
 
 TEST_DIR = os.path.dirname(__file__)
 
+try:
+    import ray
+
+    HAS_RAY = True
+except ImportError:
+    HAS_RAY = False
+
+
+def pytest_sessionstart(session):  # pytest_configure(config)
+    """Called after the Session object has been created and
+    before performing collection and entering the run test loop.
+    """
+
+    # Creates a tmp directory for writing files.
+    os.makedirs("./tests/tmp", exist_ok=True)
+
+    # Initializes ray if available.
+    if HAS_RAY:
+        if not ray.is_initialized():
+            ray.init(num_cpus=3)
+
+
+def pytest_sessionfinish(session, exitstatus):
+    # Shutdown ray if possible.
+    if HAS_RAY:
+        ray.shutdown()
+
 
 @pytest.fixture(scope="session", autouse=True)
 def turn_on_logging():
@@ -19,7 +46,7 @@ def path_4nss_config():
 
 @pytest.fixture
 def path_4nss_output():
-    return os.path.join(TEST_DIR, "tmp/", "4nss/POVME_")
+    return os.path.join(TEST_DIR, "tmp/", "4nss/")
 
 
 @pytest.fixture

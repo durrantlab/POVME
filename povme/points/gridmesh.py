@@ -7,13 +7,15 @@ from scipy import spatial
 
 from ..config import POVMEConfig
 from ..io import write_pdbs
-from ..parallel import MultiprocessingManager, MultiprocessingTaskGeneral
+from ..parallel import RayManager, RayTaskGeneral
 
 
-class MultiprocessingRemovePointsOutsideHullTask(MultiprocessingTaskGeneral):
+class TaskRemovePointsOutsideHull(RayTaskGeneral):
     """A class to remove points outside a convex hull using multiple processors."""
 
-    def value_func(self, item: tuple[Any, npt.NDArray[np.float64]]) -> npt.NDArray[np.float64]:
+    def value_func(
+        self, item: tuple[Any, npt.NDArray[np.float64]]
+    ) -> npt.NDArray[np.float64]:
         """Removes points outside the convex hull.
 
         Args:
@@ -33,10 +35,12 @@ class MultiprocessingRemovePointsOutsideHullTask(MultiprocessingTaskGeneral):
             return np.array([])  # Return empty array on error
 
 
-class MultiprocessingGetClosePointsTask(MultiprocessingTaskGeneral):
+class TaskGetClosePoints(RayTaskGeneral):
     """A class to identify box points that are near other, user-specified points."""
 
-    def value_func(self, item: tuple[spatial.KDTree, float, npt.NDArray[np.float64]]) -> npt.NDArray[np.float64]:
+    def value_func(
+        self, item: tuple[spatial.KDTree, float, npt.NDArray[np.float64]]
+    ) -> npt.NDArray[np.float64]:
         """Identifies indices of box points close to other points.
 
         Args:
@@ -92,7 +96,7 @@ class GridMesh:
         max_y = self.__snap_float(box[1][1], res) + 1.1 * res
         max_z = self.__snap_float(box[1][2], res) + 1.1 * res
 
-        x, y, z = np.mgrid[min_x:max_x:res, min_y:max_y:res, min_z:max_z:res] # type: ignore
+        x, y, z = np.mgrid[min_x:max_x:res, min_y:max_y:res, min_z:max_z:res]  # type: ignore
         self.points = np.array(list(zip(x.ravel(), y.ravel(), z.ravel())))
 
     def __snap_float(
@@ -123,15 +127,13 @@ class GridMesh:
         # Prepare input as list of tuples: (hull, some_points)
         chunks = [(hull, t) for t in np.array_split(self.points, config.n_cores)]
 
-        # Initialize MultiprocessingManager with the appropriate task class
-        manager = MultiprocessingManager(
-            inputs=chunks,
+        # Initialize RayManager with the appropriate task class
+        ray_manager = RayManager(
+            task_class=TaskRemovePointsOutsideHull,
             n_cores=config.n_cores,
-            task_class=MultiprocessingRemovePointsOutsideHullTask,
         )
-
-        # Collect results and update self.points
-        processed_chunks = manager.results
+        ray_manager.submit_tasks(items=chunks)
+        processed_chunks = ray_manager.get_results()
 
         # Each element in processed_chunks is either a numpy array of new_pts or an error tuple
         valid_points = []
@@ -174,15 +176,13 @@ class GridMesh:
             for t in np.array_split(other_points, config.n_cores)
         ]
 
-        # Initialize MultiprocessingManager with the appropriate task class
-        manager = MultiprocessingManager(
-            inputs=chunks,
+        # Initialize RayManager with the appropriate task class
+        ray_manager = RayManager(
+            task_class=TaskGetClosePoints,
             n_cores=config.n_cores,
-            task_class=MultiprocessingGetClosePointsTask,
         )
-
-        # Collect results and find unique indices
-        processed_chunks = manager.results
+        ray_manager.submit_tasks(items=chunks)
+        processed_chunks = ray_manager.get_results()
 
         # Each element in processed_chunks is either a numpy array of indices or an error tuple
         valid_indices = []
