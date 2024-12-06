@@ -70,8 +70,8 @@ the results for further inspection.
 """
 
 from typing import Any, Generator
-from abc import ABC, abstractmethod
 
+from abc import ABC, abstractmethod
 from collections.abc import Callable
 
 import ray
@@ -100,7 +100,9 @@ class RayManager:
     A manager class for handling task submissions and result collection using Ray's Task Parallelism.
     """
 
-    def __init__(self, task_class: Callable[[], Any], n_cores: int = -1, use_ray: bool = False) -> None:
+    def __init__(
+        self, task_class: Callable[[], Any], n_cores: int = -1, use_ray: bool = False
+    ) -> None:
         """Initializes the RayManager.
 
         Args:
