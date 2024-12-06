@@ -100,18 +100,24 @@ class RayManager:
     A manager class for handling task submissions and result collection using Ray's Task Parallelism.
     """
 
-    def __init__(self, task_class: Callable[[], Any], n_cores: int = -1) -> None:
+    def __init__(self, task_class: Callable[[], Any], n_cores: int = -1, use_ray: bool = False) -> None:
         """Initializes the RayManager.
 
         Args:
             task_class: A callable that returns an instance with a `run` method for
                 processing each item.
             n_cores: Number of parallel tasks to run. If <= 0, uses all available CPUs.
+            use_ray: Flag to determine if Ray should be used. If False, runs tasks sequentially.
         """
         self.task_class = task_class
         """
         A callable that returns an instance with a `run` method for
         processing each item.
+        """
+
+        self.use_ray = use_ray
+        """
+        Flag to determine if Ray should be used. If False, runs tasks sequentially.
         """
 
         self.n_cores = (
@@ -198,6 +204,40 @@ class RayManager:
 
         task_gen = self.task_generator(items, chunk_size)
 
+        if self.use_ray:
+            self._submit_ray(task_gen)
+        else:
+            self._submit(task_gen)
+
+    def _submit(self, task_gen: Generator[Any, None, None]) -> None:
+        """Handles task submission and result collection sequentially.
+
+        Args:
+            task_gen: Generator yielding tasks to process.
+        """
+        results = []
+        for item in task_gen:
+            result = self.task_class().run(item)
+            results.append(result)
+
+            if self.save_func and len(results) >= self.save_interval:
+                self.save_func(results[: self.save_interval], **self.save_kwargs)
+                self.results.extend(results)
+                results = results[self.save_interval :]
+
+        if self.save_func and results:
+            self.save_func(results, **self.save_kwargs)
+        self.results.extend(results)
+
+    def _submit_ray(self, task_gen: Generator[Any, None, None]) -> None:
+        """Handles task submission and result collection using Ray.
+
+        Args:
+            task_gen: Generator yielding tasks to process.
+        """
+        if not ray.is_initialized():
+            ray.init()
+
         results = []
         for item in task_gen:
             if len(self.futures) >= self.n_cores:
@@ -206,29 +246,26 @@ class RayManager:
                 result = ray.get(done_futures[0])
                 results.append(result)
 
-                # Save results if save_func is set and interval is reached
                 if self.save_func and len(results) >= self.save_interval:
                     self.save_func(results[: self.save_interval], **self.save_kwargs)
                     self.results.extend(results)
                     results = results[self.save_interval :]
 
-            # Submit new task
+            # Submit new task to Ray
             future = ray_worker.remote(self.task_class, item)
             self.futures.append(future)
 
-        # Collect remaining futures
+        # Collect remaining Ray futures
         while self.futures:
             done_futures, self.futures = ray.wait(self.futures, num_returns=1)
             result = ray.get(done_futures[0])
             results.append(result)
 
-            # Save results if save_func is set and interval is reached
             if self.save_func and len(results) >= self.save_interval:
                 self.save_func(results[: self.save_interval], **self.save_kwargs)
                 self.results.extend(results)
                 results = results[self.save_interval :]
 
-        # Save any remaining results
         if self.save_func and results:
             self.save_func(results, **self.save_kwargs)
         self.results.extend(results)

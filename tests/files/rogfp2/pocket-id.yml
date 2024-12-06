@@ -10,4 +10,6 @@ n_spheres: 5
 
 sphere_padding: 5.0
 
+use_ray: false
+
 n_cores: 4

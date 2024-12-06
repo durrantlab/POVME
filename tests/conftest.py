@@ -22,11 +22,6 @@ def pytest_sessionstart(session):  # pytest_configure(config)
     # Creates a tmp directory for writing files.
     os.makedirs("./tests/tmp", exist_ok=True)
 
-    # Initializes ray if available.
-    if HAS_RAY:
-        if not ray.is_initialized():
-            ray.init(num_cpus=3)
-
 
 def pytest_sessionfinish(session, exitstatus):
     # Shutdown ray if possible.

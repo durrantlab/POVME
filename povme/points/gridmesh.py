@@ -131,6 +131,7 @@ class GridMesh:
         ray_manager = RayManager(
             task_class=TaskRemovePointsOutsideHull,
             n_cores=config.n_cores,
+            use_ray=config.use_ray,
         )
         ray_manager.submit_tasks(items=chunks)
         processed_chunks = ray_manager.get_results()
@@ -180,6 +181,7 @@ class GridMesh:
         ray_manager = RayManager(
             task_class=TaskGetClosePoints,
             n_cores=config.n_cores,
+            use_ray=config.use_ray,
         )
         ray_manager.submit_tasks(items=chunks)
         processed_chunks = ray_manager.get_results()

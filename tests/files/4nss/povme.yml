@@ -35,6 +35,8 @@ contiguous_pocket_seed_box:
 
 contiguous_points_criteria: 3
 
+use_ray: false
+
 n_cores: 4
 
 use_disk_not_memory: false

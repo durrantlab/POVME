@@ -104,6 +104,9 @@ class POVMEConfig(BaseModel, YamlIO):
     contiguous_points_criteria: int = 4
     """The minimum number of neighboring points required to consider two pocket volumes contiguous."""
 
+    use_ray: bool = False
+    """Parallelize computations with ray."""
+
     n_cores: int = 4
     """Number of processors to use for the calculation on Unix-based systems."""
 

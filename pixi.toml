@@ -42,6 +42,7 @@ coverage = ">=7.6.4,<8"
 pip = ">=24.3.1,<25"
 setuptools = ">=75.3.0,<76"
 types-pyyaml = ">=6.0.12.20240917,<7"
+scalene = ">=1.5.41,<2"
 
 
 [feature.dev.tasks]
@@ -51,6 +52,18 @@ black = { cmd = ["black", "--config", ".black.toml", "./povme", "./tests", "||",
 format = { depends-on = ["mdlint", "isort", "black"] }
 tests = { cmd = [
     "PYTHONPATH=.",
+    "pytest",
+    "-c",
+    ".pytest.ini",
+    "--cov='povme'",
+    "--cov-report=xml",
+    "--junit-xml=report.xml",
+    "--failed-first",
+]}
+profile = { cmd = [
+    "PYTHONPATH=.",
+    "scalene",
+    "-m",
     "pytest",
     "-c",
     ".pytest.ini",

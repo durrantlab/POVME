@@ -394,7 +394,7 @@ class PocketVolume:
 
         # Initialize RayManager
         ray_manager = RayManager(
-            task_class=TaskComputeVolumeFromPDBLines, n_cores=config.n_cores
+            task_class=TaskComputeVolumeFromPDBLines, n_cores=config.n_cores, use_ray=config.use_ray
         )
         init_vol_csv(output_prefix)
 
