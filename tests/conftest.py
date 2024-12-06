@@ -67,3 +67,13 @@ def path_rogfp2_config():
 @pytest.fixture
 def path_rogfp2_output():
     return os.path.join(TEST_DIR, "tmp/", "rogfp2/")
+
+
+@pytest.fixture
+def path_rogfp2_traj_config():
+    return os.path.join(TEST_DIR, "files/rogfp2/povme.yml")
+
+
+@pytest.fixture
+def path_rogfp2_traj_output():
+    return os.path.join(TEST_DIR, "tmp/", "rogfp2-traj/")

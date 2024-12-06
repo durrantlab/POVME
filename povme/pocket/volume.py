@@ -1,8 +1,6 @@
 from typing import Any, Generator
 
-import csv
 import os
-import shutil
 import sys
 import time
 from io import StringIO
@@ -34,35 +32,6 @@ def get_unique_rows(a):
     a[a == -0.0] = 0.0
     b = np.ascontiguousarray(a).view(np.dtype((np.void, a.dtype.itemsize * a.shape[1])))
     return np.unique(b).view(a.dtype).reshape(-1, a.shape[1])  # unique_a
-
-
-def load_multi_frame_pdb_generator(
-    filename: str,
-) -> Generator[tuple[str, int], None, None]:
-    """Generator to yield PDB frames one by one.
-
-    Args:
-        filename: Path to the multi-frame PDB file.
-
-    Yields:
-        A tuple containing the PDB string and its frame index.
-    """
-    with open(filename, "r") as f:
-        frame_idx = 1
-        pdb_lines: list[str] = []
-        for line in f:
-            if line.startswith("END"):
-                if pdb_lines:
-                    pdb_string = "".join(pdb_lines)
-                    yield (pdb_string, frame_idx)
-                    frame_idx += 1
-                    pdb_lines = []
-            else:
-                pdb_lines.append(line)
-        # Yield the last frame if the file doesn't end with 'END'
-        if pdb_lines:
-            pdb_string = "".join(pdb_lines)
-            yield (pdb_string, frame_idx)
 
 
 def collect_pdb_frames_in_chunks(
@@ -109,10 +78,15 @@ class TaskComputeVolumeFromPDBLines(RayTaskGeneral):
         frame_index, pdb_string, config, pts, regions_contig, output_prefix = item
 
         # Load the PDB from lines
+        logger.debug(f"Computing volume from PDB lines on frame {frame_index}")
         str_obj = StringIO(pdb_string)
         pdb = Molecule()
         pdb.io.load_pdb_into_using_file_object(str_obj, False, False, False)
-
+        coord_shape = pdb.information.get_coordinates().shape
+        if len(coord_shape) < 3:
+            logger.debug("Loaded 1 structure")
+        else:
+            logger.debug(f"Loaded {coord_shape[0]} structure")
         # From here, do the volume calculation steps (adapted from TaskCalcVolume)
         try:
             volumes = ConvexHull.volume(
@@ -335,6 +309,7 @@ class PocketVolume:
             path_pdb: Path to PDB file. This will overwrite the configuration file.
             output_prefix: Path to output directory including directories.
         """
+        logger.info("Starting pocket volume calculator")
         self.t_start = time.time()
         config = self.config
         config.log()
@@ -354,16 +329,11 @@ class PocketVolume:
             output_dirname = os.path.dirname(output_prefix)
             os.makedirs(output_dirname, exist_ok=True)
 
-        # create temp swap directory if needed
-        if config.use_disk_not_memory:
-            if os.path.exists("./.povme_tmp"):
-                shutil.rmtree("./.povme_tmp")
-            os.mkdir("./.povme_tmp")
-
         # User specified regions to include in the PDB structure.
         # Thus, we compute these points.
         pts = None
         if config.load_points_path is not None:
+            logger.debug("Loading points")
             if not os.path.exists(config.load_points_path):
                 logger.error(
                     f"points file at {config.load_points_path} does not exist!"
@@ -393,6 +363,7 @@ class PocketVolume:
             sys.exit(0)
 
         # Initialize RayManager
+        logger.info("Initializing volume calculator manager")
         ray_manager = RayManager(
             task_class=TaskComputeVolumeFromPDBLines,
             n_cores=config.n_cores,
@@ -415,6 +386,7 @@ class PocketVolume:
                         output_prefix,
                     )
                 )
+            logger.debug(f"Submitted {len(tasks)} tasks in chunk")
             ray_manager.submit_tasks(
                 tasks,
                 chunk_size=len(tasks),  # submit the chunk at once

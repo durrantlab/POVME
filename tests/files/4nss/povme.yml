@@ -30,16 +30,15 @@ contiguous_pocket_seed_sphere:
   - center: [67.0, 102.0, 57.0]
     radius: 4.0
 
-contiguous_pocket_seed_box:
-  - []
+# contiguous_pocket_seed_box:
+#   - center: []
+#     lengths: []
 
 contiguous_points_criteria: 3
 
-use_ray: false
+use_ray: true
 
 n_cores: 4
-
-use_disk_not_memory: false
 
 save_individual_pocket_volumes: true
 

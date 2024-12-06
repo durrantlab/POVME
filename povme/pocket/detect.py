@@ -45,7 +45,7 @@ class PocketDetector:
         molecule = Molecule()
         molecule.io.load_pdb_into(path_pdb)
 
-        # Step 2: Get rid of hydogen atoms. They just slow stuff down.
+        # Step 2: Get rid of hydrogen atoms. They just slow stuff down.
 
         print("Removing hydrogen atoms...")
         sel = molecule.selections.select_atoms({"element_stripped": b"H"})

@@ -5,9 +5,8 @@ from functools import reduce
 import numpy as np
 import numpy.typing as npt
 from loguru import logger
-from pymolecule import Molecule
-from scipy.spatial.distance import cdist, pdist, squareform
 from scipy.spatial import cKDTree
+from scipy.spatial.distance import cdist, pdist, squareform
 
 from povme.io import gzopenfile, numpy_to_pdb, openfile, write_to_file
 from povme.parallel import RayTaskGeneral
@@ -378,12 +377,6 @@ class ConvexHull:
         if config.output_equal_num_points_per_frame:
             pts_deleted = pts.copy()
 
-        # you may need to load it from disk if the user so specified
-        if config.use_disk_not_memory:  # so you need to load it from disk
-            pym_filename = pdb
-            pdb = Molecule()
-            pdb.io.load_pym_into(pym_filename)
-
         # remove the points that are far from the points region anyway
         min_pts = np.min(pts, 0) - config.distance_cutoff - 1
         max_pts = np.max(pts, 0) + config.distance_cutoff + 1
@@ -436,7 +429,7 @@ class ConvexHull:
                 continue
             # Distances to these candidate atoms
             candidate_coords = coords[atom_inds]
-            dist_subset = np.sqrt(np.sum((candidate_coords - pts[i])**2, axis=1))
+            dist_subset = np.sqrt(np.sum((candidate_coords - pts[i]) ** 2, axis=1))
 
             # Each atom has a different cutoff: vdw[atom_ind] + config.distance_cutoff
             atom_cutoffs = vdw[atom_inds] + config.distance_cutoff

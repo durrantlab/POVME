@@ -6,6 +6,7 @@ from loguru import logger
 
 def init_vol_csv(output_prefix: str) -> None:
     csv_filename = f"{output_prefix}volumes.csv"
+    logger.info(f"Initializing CSV volume file: {csv_filename}")
     if not os.path.exists(csv_filename):
         with open(csv_filename, mode="w", newline="") as csv_file:
             writer = csv.writer(csv_file)

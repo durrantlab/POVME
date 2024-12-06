@@ -110,9 +110,6 @@ class POVMEConfig(BaseModel, YamlIO):
     n_cores: int = 4
     """Number of processors to use for the calculation on Unix-based systems."""
 
-    use_disk_not_memory: bool = False
-    """Whether to prioritize disk space over memory for large trajectory files."""
-
     save_individual_pocket_volumes: bool = False
     """Whether to save the pocket-volume points for each frame to separate PDB files."""
 

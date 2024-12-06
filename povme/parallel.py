@@ -79,7 +79,7 @@ from loguru import logger
 
 
 @ray.remote
-def ray_worker(task_class: Callable[[], Any], item: Any) -> Any:
+def ray_worker(task_class: Callable[[], Any], chunk: list[Any]) -> Any:
     """
     Remote function to process a single item using the provided task class.
 
@@ -91,7 +91,7 @@ def ray_worker(task_class: Callable[[], Any], item: Any) -> Any:
         Any: The result of the `run` method or an error tuple.
     """
     task_instance = task_class()
-    result = task_instance.run(item)
+    result = task_instance.run(chunk)
     return result
 
 
@@ -179,10 +179,7 @@ class RayManager:
         """
         for start in range(0, len(items), chunk_size):
             end = min(start + chunk_size, len(items))
-            chunk = items[start:end]
-            logger.info(f"Yielding tasks {start} to {end - 1}")
-            for item in chunk:
-                yield item
+            yield items[start:end]
 
     def submit_tasks(
         self,
@@ -218,16 +215,16 @@ class RayManager:
             task_gen: Generator yielding tasks to process.
         """
         results = []
-        for item in task_gen:
-            result = self.task_class().run(item)
-            results.append(result)
+        for chunk in task_gen:
+            results_chunk = self.task_class().run(chunk)
+            results.extend(results_chunk)
 
             if self.save_func and len(results) >= self.save_interval:
                 self.save_func(results[: self.save_interval], **self.save_kwargs)
                 self.results.extend(results)
                 results = results[self.save_interval :]
 
-        if self.save_func and results:
+        if self.save_func and len(results) > 0:
             self.save_func(results, **self.save_kwargs)
         self.results.extend(results)
 
@@ -241,12 +238,12 @@ class RayManager:
             ray.init()
 
         results = []
-        for item in task_gen:
+        for chunk in task_gen:
             if len(self.futures) >= self.n_cores:
                 # Wait for any worker to finish
                 done_futures, self.futures = ray.wait(self.futures, num_returns=1)
-                result = ray.get(done_futures[0])
-                results.append(result)
+                results_chunk = ray.get(done_futures[0])
+                results.extend(results_chunk)
 
                 if self.save_func and len(results) >= self.save_interval:
                     self.save_func(results[: self.save_interval], **self.save_kwargs)
@@ -254,14 +251,14 @@ class RayManager:
                     results = results[self.save_interval :]
 
             # Submit new task to Ray
-            future = ray_worker.remote(self.task_class, item)
+            future = ray_worker.remote(self.task_class, chunk)
             self.futures.append(future)
 
         # Collect remaining Ray futures
         while self.futures:
             done_futures, self.futures = ray.wait(self.futures, num_returns=1)
-            result = ray.get(done_futures[0])
-            results.append(result)
+            results_chunk = ray.get(done_futures[0])
+            results.extend(results_chunk)
 
             if self.save_func and len(results) >= self.save_interval:
                 self.save_func(results[: self.save_interval], **self.save_kwargs)
@@ -289,23 +286,26 @@ class RayTaskGeneral(ABC):
     def __init__(self):
         self.results: list[Any] = []
 
-    def run(self, item: Any) -> Any:
-        """Processes a single item.
+    def run(self, items: list[Any]) -> list[Any]:
+        """Processes multiple items.
 
         This method wraps the `process_item` method with a try-except block.
 
         Args:
-            item: The input data required for the calculation.
+            items: The input data required for the calculation.
 
         Returns:
-            The result of the calculation or an error tuple.
+            The result of the calculations or an error tuple.
         """
-        try:
-            result = self.process_item(item)
-            return result
-        except Exception as e:
-            logger.exception(f"Error processing item {item}: {e}")
-            return ("error", str(e))
+        results = []
+        for item in items:
+            try:
+                result = self.process_item(item)
+                results.append(result)
+            except Exception as e:
+                logger.exception(f"Error processing item {item}: {e}")
+                results.append(("error", str(e)))
+        return results
 
     @abstractmethod
     def process_item(self, item: Any) -> Any:
