@@ -6,7 +6,7 @@ from pymolecule import Molecule
 from scipy.cluster.vq import kmeans2
 from scipy.spatial.distance import cdist
 
-from povme.config import PocketIDConfig
+from povme.config import PocketDetectConfig
 from povme.io import openfile, write_pdbs
 from povme.points import GridMesh
 from povme.points.hull import ConvexHull
@@ -17,17 +17,16 @@ class PocketDetector:
 
     def __init__(
         self,
-        path_config: str | None = None,
+        config: PocketDetectConfig | None = None,
     ) -> None:
         """Initialize Pocket detector.
 
         Args:
-            path_config: Path to a configuration YAML file.
+            config: Pocket detection configuration.
         """
-
-        self.config = PocketIDConfig()
-        if path_config is not None:
-            self.config.from_yaml(path_config)
+        if config is None:
+            config = PocketDetectConfig()
+        self.config = PocketDetectConfig()
 
     def run(self, path_pdb: str, output_prefix: str = "") -> None:
 

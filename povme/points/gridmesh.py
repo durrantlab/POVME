@@ -5,7 +5,7 @@ import numpy.typing as npt
 from loguru import logger
 from scipy import spatial
 
-from povme.config import POVMEConfig
+from povme.config import PocketVolumeConfig
 from povme.io import write_pdbs
 from povme.parallel import RayManager, RayTaskGeneral
 
@@ -156,7 +156,7 @@ class GridMesh:
         self,
         other_points: npt.NDArray[np.float64],
         dist_cutoff: float,
-        config: POVMEConfig,
+        config: PocketVolumeConfig,
     ) -> None:
         """Removes all points in this box that come within the points specified
         in a numpy array

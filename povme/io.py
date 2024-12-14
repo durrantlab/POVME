@@ -5,7 +5,7 @@ from pathlib import Path, PureWindowsPath
 import numpy as np
 import numpy.typing as npt
 
-from povme.config import POVMEConfig
+from povme.config import PocketVolumeConfig
 
 
 def fix_filename(path: str, must_exist: bool = True) -> Path:
@@ -296,7 +296,7 @@ def numpy_to_pdb(narray, letter, resname=""):
 
 
 def dx_freq(
-    freq_mat: npt.NDArray[np.float64], output_prefix: str, config: POVMEConfig
+    freq_mat: npt.NDArray[np.float64], output_prefix: str, config: PocketVolumeConfig
 ) -> None:
     """Generates a DX file that records the frequency that a volume element is
     open.

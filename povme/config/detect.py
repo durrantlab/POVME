@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from povme.config.io import YamlIO
 
 
-class PocketIDConfig(BaseModel, YamlIO):
+class PocketDetectConfig(BaseModel, YamlIO):
     pocket_detection_resolution: float = 4.0
     """The distance between probe points used to initially find the pockets"""
 

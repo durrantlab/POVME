@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from povme.config.io import YamlIO
 
 
-class POVMEConfig(BaseModel, YamlIO):
+class PocketVolumeConfig(BaseModel, YamlIO):
     grid_spacing: float = 1.0
     """The distance, in Angstroms, between adjacent points.
 

@@ -1,4 +1,5 @@
 nav:
     - Home: index.md
+    - Pocket detection: detect.md
     - Monolith docs: mono-docs.md
     - API: api

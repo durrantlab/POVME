@@ -2,6 +2,7 @@ import glob
 import os
 import shutil
 
+from povme.config import PocketVolumeConfig
 from povme.pocket.volume import PocketVolume
 
 
@@ -10,8 +11,10 @@ def test_4nss(path_4nss_config, path_4nss_output):
     if os.path.exists(dir_output):
         shutil.rmtree(dir_output)
 
-    povme = PocketVolume(path_4nss_config)
-    results = povme.run(
+    config = PocketVolumeConfig()
+    config.from_yaml(path_4nss_config)
+    volume_calc = PocketVolume(config)
+    results = volume_calc.run(
         "./tests/files/4nss/4nss.pdb", output_prefix=path_4nss_output, chunk_size=1
     )
 
@@ -29,8 +32,10 @@ def test_rogfp2_traj(path_rogfp2_traj_config, path_rogfp2_traj_output):
     if os.path.exists(dir_output):
         shutil.rmtree(dir_output)
 
-    povme = PocketVolume(path_rogfp2_traj_config)
-    results = povme.run(
+    config = PocketVolumeConfig()
+    config.from_yaml(path_rogfp2_traj_config)
+    volume_calc = PocketVolume(config)
+    results = volume_calc.run(
         "./tests/files/rogfp2/rogfp2-traj.pdb",
         output_prefix=path_rogfp2_traj_output,
         chunk_size=1,

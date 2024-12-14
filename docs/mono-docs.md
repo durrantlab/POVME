@@ -1,5 +1,9 @@
 # Monolith documentation
 
+!!! danger
+    This documentation is directly from an old version of POVME.
+    Use at your own discretion!
+
 ## 2. Align a PDB-formatted trajectory
 
 POVME accepts a multi-frame PDB (Protein Data Bank) file as input. The

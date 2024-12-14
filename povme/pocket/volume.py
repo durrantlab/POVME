@@ -10,7 +10,7 @@ from loguru import logger
 from pymolecule import Molecule
 from scipy.spatial.distance import cdist
 
-from povme.config import POVMEConfig
+from povme.config import PocketVolumeConfig
 from povme.io import dx_freq, gzopenfile, numpy_to_pdb, openfile, write_to_file
 from povme.parallel import RayManager, RayTaskGeneral
 from povme.pocket.savers import init_vol_csv, write_vol_csv
@@ -103,17 +103,16 @@ class PocketVolume:
 
     def __init__(
         self,
-        path_config: str | None = None,
+        config: PocketVolumeConfig | None = None,
     ) -> None:
         """Initialize POVME.
 
         Args:
-            path_config: Path to a configuration YAML file.
+            config: Pocket volume calculation configuration.
         """
-
-        self.config = POVMEConfig()
-        if path_config is not None:
-            self.config.from_yaml(path_config)
+        if config is None:
+            config = PocketVolumeConfig()
+        self.config = config
 
     def gen_points(self, config):
         logger.info("Generating the pocket-encompassing point field")
