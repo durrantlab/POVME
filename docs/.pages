@@ -2,4 +2,5 @@ nav:
     - Home: index.md
     - Methodology: method
     - Pocket detection: detect.md
+    - Pocket volume: volume.md
     - API: api
