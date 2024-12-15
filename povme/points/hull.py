@@ -251,12 +251,6 @@ class ConvexHull:
             triangles.append((np.array(tuple1), np.array(tuple2), np.array(tuple3)))
 
             first_time = False
-
-        # print "find all triangles:", time.time() - begintime
-
-        # print "section1:", section1
-        # print "section2:", section2
-        # print "section3:", section3
         return triangles
 
     def akl_toussaint(self, points: npt.NDArray[np.float64]) -> npt.NDArray[np.float64]:
