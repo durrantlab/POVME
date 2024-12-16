@@ -47,19 +47,49 @@ pixi shell
 
 ## Installation
 
-Clone the [repository](https://github.com/durrantlab/POVME):
+### Development
+
+To install the latest development version of `povme`, follow these steps.
+
+Clone the repository.
 
 ```bash
 git clone https://github.com/durrantlab/POVME
 ```
 
-Install `povme` using `pip` after moving into the directory.
+Navigate into the cloned directory.
 
-```sh
+```bash
+cd POVME
+```
+
+Install the development version using `pip`.
+
+```bash
 pip install .
 ```
 
-This will install all dependencies and `povme` into your current Python environment.
+This will install `povme` along with all required dependencies into your current Python environment.
+
+### Tagged
+
+To install a specific version of `povme`, such as `v2.2.2`, follow these steps.
+
+Clone the repository and check out the desired version tag.
+
+```bash
+git clone https://github.com/durrantlab/POVME
+cd POVME
+git checkout v2.2.2
+```
+
+Install the tagged version using `pip`.
+
+```bash
+pip install .
+```
+
+This will install the specified version of `povme` and its dependencies into your current Python environment.
 
 ## Cite
 
@@ -72,8 +102,7 @@ If you use POVME in your work, please cite:
 
 This program is free software: you can redistribute it and/or modify it under the terms of the GNU General Public License as published by the Free Software Foundation, either version 3 of the License, or (at your option) any later version.
 
-This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS
-FOR A PARTICULAR PURPOSE.
+This program is distributed in the hope that it will be useful, but WITHOUT ANY WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 See the GNU General Public License for more details.
 
 You should have received a copy of the GNU General Public License along with this program.
