@@ -1,10 +1,11 @@
-# POVME Volume Command Documentation
+# Computing volume
 
-The `povme volume` command in POVME (POcket Volume MEasurer) is designed to compute and analyze the volume of molecular pockets based on user-specified inclusion and exclusion regions. This command can process both static protein structures and molecular dynamics (MD) trajectories to identify binding pocket volumes and characteristics.
+The `povme volume` command in POVME is designed to compute and analyze the volume of molecular pockets based on user-specified inclusion and exclusion regions.
+This command can process both static protein structures and molecular dynamics (MD) trajectories to identify binding pocket volumes and characteristics.
 
-## YAML Configuration for `povme volume`
+## YAML configuration
 
-The command is configured through a YAML input file. Below is an example configuration:
+The command is configured through a YAML input file that will be used to update [`PocketVolumeConfig`][config.volume.PocketVolumeConfig] that defines the parameters for pocket volume calculations.
 
 ```yaml
 grid_spacing: 1.0
@@ -16,18 +17,6 @@ points_inclusion_sphere:
   - center: [-100.0, -100.0, -100.0]
     radius: 10.0
 
-points_inclusion_box:
-  - center: [100.0, 100.0, 100.0]
-    lengths: [10.0, 10.0, 10.0]
-
-points_exclusion_sphere:
-  - center: [-100.0, -100.0, -100.0]
-    radius: 10.0
-
-points_exclusion_box:
-  - center: [100.0, 100.0, 100.0]
-    lengths: [10.0, 10.0, 10.0]
-
 save_points: true
 distance_cutoff: 1.09
 convex_hull_exclusion: true
@@ -35,8 +24,8 @@ convex_hull_exclusion: true
 contiguous_pocket_seed_sphere:
   - center: [67.0, 102.0, 57.0]
     radius: 4.0
-
 contiguous_points_criteria: 3
+
 use_ray: true
 n_cores: 8
 
@@ -60,9 +49,11 @@ compress_output: false
       filters:
       - "!^log$"
 
-## Running the Command
+## Running the command
 
-### Syntax
+Once the configuration file is ready, you can use the `povme detect` command to identify pockets.
+The command syntax is:
+
 ```bash
 povme volume -c config.yaml -i input.pdb -o output/
 ```

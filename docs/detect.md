@@ -46,7 +46,7 @@ Here:
 -   `-i` specifies the input PDB file.
 -   `-o` specifies the output directory or file prefix.
 
-## Analyzing the Results
+## Analyzing the results
 
 The `povme detect` command produces a set of PDB files that comprehensively describe the detected pockets and their associated parameters.
 Each PDB file contains a set of points that represent a POVME-detected pocket.
