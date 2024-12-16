@@ -1,5 +1,6 @@
 nav:
     - Home: index.md
+    - Methodology: method
     - Pocket detection: detect.md
-    - Monolith docs: mono-docs.md
+    - Pocket volume: volume.md
     - API: api

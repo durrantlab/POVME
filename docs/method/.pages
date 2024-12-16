@@ -1,0 +1,4 @@
+nav:
+    - Methodology: index.md
+    - Trajectory preparation: prepare
+    - Pocket detection: detect

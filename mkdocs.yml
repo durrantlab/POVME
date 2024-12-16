@@ -69,6 +69,10 @@ plugins:
             merge_init_into_class: true
             docstring_section_style: spacy
             show_if_no_docstring: true
+            show_labels: false
+            parameter_headings: true
+            show_symbol_type_heading: true
+            show_symbol_type_toc: true
   - awesome-pages:
         collapse_single_pages: true
         strict: false
@@ -111,10 +115,13 @@ extra_css:
   - css/mkdocstrings.css
   - css/launchy.css
   - css/jupyter.css
+  - css/mol.css
+  - https://cdn.jsdelivr.net/npm/molstar@latest/build/viewer/molstar.css
 
 extra_javascript:
   - https://unpkg.com/mathjax@3/es5/tex-mml-chtml.js
   - js/mathjax-config.js
+  - https://cdn.jsdelivr.net/npm/molstar@4.4.1/build/viewer/molstar.min.js
 
 markdown_extensions:
   - abbr
