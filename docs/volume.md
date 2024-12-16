@@ -61,3 +61,18 @@ povme volume -c config.yaml -i input.pdb -o output/
 -   `-c`: Path to the YAML configuration file.
 -   `-i`: Input file, typically a PDB structure or trajectory.
 -   `-o`: Output directory.
+
+## Outputs
+
+By default, POVME writes several files to the disk.
+POVME will save the volume measurements to a CSV file that can be easily pasted into popular spreadsheet programs.
+
+POVME also optionally saves the pocket-occupying points of each frame to PDB file(s) on this disk.
+The user can instruct the program to save these points to separate files and/or to a single PDB trajectory.
+Some visualization programs (e.g., VMD) are only compatible with trajectories with the same
+number of atoms in each frame.
+To satisfy this requirement, POVME can optionally write extra points to the origin (0.0, 0.0, 0.0) on a frame-by-frame basis.
+
+Finally, POVME also optionally saves a volumetric density map in the Data Explorer (DX) format.
+A volumetric density value is associated with each pocket-occupying point by calculating the fraction of all trajectory pocket volumes that include the given point.
+If the density map is displayed as an isosurface, the value of the isosurface expresses the fraction of time (e.g., throughout the simulation) that the pocket included the displayed volume.
