@@ -1,6 +1,6 @@
 <h1 align="center">POVME</h1>
 
-<h4 align="center">Detect and characterize pockets from molecular simulations.</h4>
+<h4 align="center">Detect and characterize protein pockets.</h4>
 
 <p align="center">
     <a href="https://github.com/durrantlab/POVME/actions/workflows/tests.yml">
@@ -17,8 +17,8 @@
     </a>
 </p>
 
-POVME (POcket Volume MEasurer) is an open-source tool designed for detailed analysis of ligand-binding pocket shapes and volumes in proteins.
-Initially developed to support structure-guided drug discovery, POVME has been widely adopted for its simplicity, speed, and flexibility.
+POVME (**PO**cket **V**olume **ME**asurer) is an open-source tool designed for detailed analysis of ligand-binding pocket shapes and volumes in proteins.
+Initially developed to support structure-based drug discovery, POVME has been widely adopted for its simplicity, speed, and flexibility.
 
 ## Why binding pocket analysis?
 
@@ -42,7 +42,7 @@ pixi install
 Now you can activate the new virtual environment using
 
 ```sh
-pixi shell
+pixi shell -e dev
 ```
 
 ## Installation
@@ -95,8 +95,8 @@ This will install the specified version of `povme` and its dependencies into you
 
 If you use POVME in your work, please cite:
 
-1.  Durrant, J.D., L. Votapka, J. Sørensen, and R. E. Amaro (2014). "POVME 2.0: An Enhanced Tool for Determining Pocket Shape and Volume Characteristics." J. Chem. Theory Comput. 10(11):5047-5056.
-2.  Durrant, J. D., C. A. de Oliveira, et al. (2011). "POVME: An algorithm for measuring binding-pocket volumes." J Mol Graph Model 29(5): 773-776.
+1.  Durrant, J. D., Votapka, L., Sørensen, J., & Amaro, R. E. (2014). POVME 2.0: An Enhanced Tool for Determining Pocket Shape and Volume Characteristics. *J. Chem. Theory Comput. 10*(11), 5047-5056.
+2.  Durrant, J. D., de Oliveira, C. A. F., & McCammon, J. A. (2011). POVME: An algorithm for measuring binding-pocket volumes. *J. Mol. Graph. Model. 29*(5), 773-776.
 
 ## License
 
