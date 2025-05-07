@@ -3,7 +3,7 @@ import os
 import numpy as np
 from loguru import logger
 from pymolecule import Molecule
-from scipy.cluster.vq import kmeans2
+from scipy.cluster.vq import ClusterError, kmeans2
 from scipy.spatial.distance import cdist
 
 from povme.config import PocketDetectConfig
@@ -29,7 +29,6 @@ class PocketDetector:
         self.config = PocketDetectConfig()
 
     def run(self, path_pdb: str, output_prefix: str = "") -> None:
-
         config = self.config
 
         # If the output prefix includes a directory, create that directory if
@@ -185,11 +184,32 @@ class PocketDetector:
 
             # do I need to whiten stuff here? not sure what whitening is.
 
-            centroids, idx = kmeans2(pts, config.n_spheres)
+            n_points = pts.shape[0]
+            logger.debug("Pocket has {} points", n_points)
+            n_clusters = min(config.n_spheres, n_points)
+            try:
+                _, idx = kmeans2(pts, n_clusters, missing="raise")
+            except ClusterError:
+                logger.warning("One of the kmeans clusters are empty")
+                logger.warning("Retrying kmeans with different initialization")
+                try:
+                    _, idx = kmeans2(pts, n_clusters, minit="++", missing="raise")
+                except ClusterError:
+                    logger.warning("kmeans still has empty clusters")
+                    logger.warning("We are using all points instead")
+                    idx = np.arange(0, n_points)
+                except Exception as e:
+                    raise e
+            except Exception as e:
+                raise e
+            finally:
+                cluster_labels = np.unique(idx)
+            logger.debug(f"Found clusters of {cluster_labels}")
 
             pts_string = ""
-            for cluster_num in range(config.n_spheres):
+            for cluster_num in cluster_labels:
                 indexes_for_this_cluster = np.nonzero(idx == cluster_num)[0]
+                logger.debug(f"Point indices for cluster: {indexes_for_this_cluster}")
                 cluster_pts = pts[indexes_for_this_cluster]
                 cluster_center = np.mean(cluster_pts, axis=0)
                 try:
