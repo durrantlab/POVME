@@ -46,3 +46,24 @@ def test_pocket_detect_rel1(path_rel1_config, path_rel1_output):
     num_output_files = len(glob.glob(path_rel1_output + "*.pdb")) - 1
     if num_output_files != 8:
         raise Exception("Expected 8 output files, but got " + str(num_output_files))
+
+
+def test_pocket_detect_5csn(path_5csn_config, path_5csn_output):
+    dir_output = os.path.dirname(path_5csn_output)
+    if os.path.exists(dir_output):
+        shutil.rmtree(dir_output)
+
+    config = PocketDetectConfig()
+    config.from_yaml(path_5csn_config)
+    pocket_id = PocketDetector(config)
+    pocket_id.run("./tests/files/5csn/5csn.pdb", path_5csn_output)
+
+    with open(path_5csn_output + "pocket1.pdb", "r") as f:
+        if "PointsInclusionSphere" not in f.read():
+            raise Exception(
+                "pocket1.pdb did not contain substring 'PointsInclusionSphere'"
+            )
+
+    num_output_files = len(glob.glob(path_5csn_output + "*.pdb"))
+    if num_output_files != 8:
+        raise Exception("Expected 8 output files, but got " + str(num_output_files))

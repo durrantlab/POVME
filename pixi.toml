@@ -9,7 +9,7 @@ readme = "README.md"
 
 [pypi-dependencies]
 povme = { path = ".", editable = true }
-pymolecule = { git = "https://github.com/durrantlab/pymolecule.git", rev = "121c34103169d362f4ed2ca9207dd5555f9dc25b" }
+pymolecule = { git = "https://github.com/durrantlab/pymolecule.git", rev = "423cf64f17c21881a1685402437bd69a81e79ccf" }
 ray = { version = ">=2.37.0,<3"}
 
 [system-requirements]

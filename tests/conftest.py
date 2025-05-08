@@ -55,6 +55,16 @@ def path_rel1_output():
 
 
 @pytest.fixture
+def path_5csn_config():
+    return os.path.join(TEST_DIR, "files/5csn/pocket-id.yml")
+
+
+@pytest.fixture
+def path_5csn_output():
+    return os.path.join(TEST_DIR, "tmp/", "5csn/")
+
+
+@pytest.fixture
 def path_rogfp2_pdb():
     return os.path.join(TEST_DIR, "files/rogfp2/rogfp2.pdb")
 

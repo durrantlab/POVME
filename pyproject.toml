@@ -1,13 +1,15 @@
 [project]
+name = "povme"
+version = "2.2.1"
+description = "Detect and characterize protein pockets."
 authors = [
     {name = "Durrant Lab", email = "durrantj@pitt.edu"}
 ]
 maintainers = [
-    {name = "Jacob Durrant", email = "durrantj@pitt.edu"}
+    {name = "Jacob Durrant", email = "durrantj@pitt.edu"},
+    {name = "Alex Maldonado", email = "alex.maldonado@pitt.edu"},
 ]
-description = "TODO"
-name = "povme"
-version = "2.2.1"
+license = "Apache-2.0"
 readme = "README.md"
 requires-python = ">=3.10,<3.13"
 # TODO: Keep this here until pixi releases building capabilities
@@ -18,13 +20,20 @@ dependencies = [
     "pyyaml>=6.0.2,<7",
     "loguru>=0.7.2,<0.8",
     "ray>=2.38.0,<3",
+    "pymolecule@git+https://github.com/durrantlab/pymolecule",
 ]
+
+[project.urls]
+Repository = "https://github.com/durrantlab/POVME"
+Documentation = "https://durrantlab.github.io/POVME/"
+Homepage = "https://durrantlab.github.io/POVME/"
 
 [project.scripts]
 povme = "povme.cli:povme_cli"
 
 [build-system]
-requires = ["setuptools"]
+requires = ["setuptools", "wheel"]
+build-backend = "setuptools.build_meta"
 
 [tool.setuptools.packages.find]
 where = ["."]
