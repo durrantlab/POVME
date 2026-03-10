@@ -3,13 +3,13 @@ authors = ["Jacob Durrant <durrantj@pitt.edu>"]
 channels = ["conda-forge"]
 description = "Detect and characterize pockets from molecular simulations"
 name = "povme"
-platforms = ["linux-64"]
+platforms = ["linux-64", "osx-64", "osx-arm64"]
 version = "2.2.1"
 readme = "README.md"
 
 [pypi-dependencies]
 povme = { path = ".", editable = true }
-pymolecule = { git = "https://github.com/durrantlab/pymolecule.git", rev = "423cf64f17c21881a1685402437bd69a81e79ccf" }
+pymolecule = { git = "https://github.com/durrantlab/pymolecule.git", rev = "614a95a0b792f83fbee77e4c7eed7d5ce046dee1" }
 ray = { version = ">=2.37.0,<3"}
 
 [system-requirements]
