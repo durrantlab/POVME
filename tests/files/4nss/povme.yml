@@ -32,7 +32,7 @@ contiguous_pocket_seed_sphere:
 
 contiguous_points_criteria: 3
 
-use_ray: true
+use_ray: false
 
 n_cores: 2
 
