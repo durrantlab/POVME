@@ -46,10 +46,7 @@ types-pyyaml = ">=6.0.12.20240917,<7"
 scalene = ">=1.5.41,<2"
 
 [feature.dev.tasks]
-mdlint = { cmd = ["markdownlint-cli2", '"**/*.{md,markdown}"', "--fix", "--config", ".markdownlint.yaml", "||", "true"] }
-isort = { cmd = ["isort", "--settings-path", ".isort.cfg", "./povme", "./tests", "||", "true"] }
-black = { cmd = ["black", "--config", ".black.toml", "./povme", "./tests", "||", "true"] }
-format = { depends-on = ["mdlint", "isort", "black"] }
+format = { cmd = ["ruff", "check", "--select", "I", "--fix", "&&", "ruff", "format", "--config", ".ruff.toml", "./"] }
 tests = { cmd = [
     "PYTHONPATH=.",
     "pytest",
