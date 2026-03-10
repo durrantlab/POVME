@@ -26,7 +26,7 @@ class PocketDetector:
         """
         if config is None:
             config = PocketDetectConfig()
-        self.config = PocketDetectConfig()
+        self.config = config
 
     def run(self, path_pdb: str, output_prefix: str = "") -> None:
         config = self.config
