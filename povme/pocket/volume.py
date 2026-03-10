@@ -1,9 +1,8 @@
-from typing import Any, Generator
-
 import os
 import sys
 import time
 from io import StringIO
+from typing import Any, Generator
 
 import numpy as np
 from loguru import logger
@@ -73,7 +72,6 @@ def collect_pdb_frames_in_chunks(
 
 
 class TaskComputeVolumeFromPDBLines(RayTaskGeneral):
-
     def process_item(self, item: tuple[Any, ...]) -> tuple[Any, ...]:
         frame_index, pdb_string, config, pts, regions_contig, output_prefix = item
 
@@ -174,7 +172,6 @@ class PocketVolume:
         )
 
     def write_points_contig(self, regions_contig, output_prefix, config):
-
         # get all the contiguous points
         contig_pts = regions_contig[0].get_points(config.grid_spacing)
         for Contig in regions_contig[1:]:

@@ -36,16 +36,18 @@ operations.
     ```python
     items_to_process = [1, 2, 3, 4, 5]
 
+
     def save_results(results, **kwargs):
         # Implement saving logic, e.g., write to a file or database
         print("Saving results:", results)
+
 
     manager.submit_tasks(
         items=items_to_process,
         chunk_size=2,
         save_func=save_results,
-        save_kwargs={'destination': 'output.txt'},
-        save_interval=2
+        save_kwargs={"destination": "output.txt"},
+        save_interval=2,
     )
     ```
 
@@ -69,10 +71,9 @@ the results for further inspection.
 
 """
 
-from typing import Any, Generator
-
 from abc import ABC, abstractmethod
 from collections.abc import Callable
+from typing import Any, Generator
 
 import ray
 from loguru import logger

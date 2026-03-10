@@ -1,6 +1,5 @@
-from typing import Any
-
 from abc import ABC
+from typing import Any
 
 import yaml
 
