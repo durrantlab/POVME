@@ -5305,8 +5305,8 @@ packages:
   timestamp: 1764896838868
 - pypi: ./
   name: povme
-  version: 2.2.1
-  sha256: 5973bf1bd0a250bd9154e17ceec48d868742792801d6a6690ae2c3289d2618b4
+  version: 2.2.2
+  sha256: b1b5c5a60e3f40c1f4686037b0f8a74d7c51f38f9ec155d9c687085827e97f37
   requires_dist:
   - numpy>=2.1.3,<3
   - scipy>=1.14.1,<2
