@@ -79,21 +79,19 @@ publish = { cmd = ["twine", "upload", "dist/*"] }
 build = ">=1.2.2.post1,<2"
 
 [feature.docs.dependencies]
+# Will need to migrate to https://zensical.org/ once it matures.
 mkdocs = ">=1.6.1,<2"
 mkdocs-material = ">=9.5.44,<10"
-pymdown-extensions = ">=10.12,<11"
-mkdocs-table-reader-plugin = ">=3.1.0,<4"
-mkdocstrings = ">=0.26.2,<0.27"
-mkdocstrings-python = ">=1.12.2,<2"
-mkdocs-gen-files = ">=0.4.0,<0.5"
-mkdocs-macros-plugin = ">=1.3.7,<2"
-mkdocs-jupyter = ">=0.25.0,<0.26"
-mkdocs-glightbox = ">=0.4.0,<0.5"
+pymdown-extensions = ">=10.21.1,<11"
+mkdocstrings = ">=1.0.3,<2"
+mkdocstrings-python = ">=2.0.2,<3"
+mkdocs-macros-plugin = ">=1.5.0,<2"
+mkdocs-glightbox = ">=0.5.2,<0.6"
 mkdocs-git-revision-date-localized-plugin = ">=1.2.9,<2"
-mkdocs-autorefs = ">=1.2.0,<2"
+mkdocs-autorefs = ">=1.4.4,<2"
+mkdocs-gen-files = ">=0.6.0,<0.7"
 
 [feature.docs.pypi-dependencies]
-material-plausible-plugin = ">=0.2.0,<0.3"
 mkdocs-awesome-pages-plugin = ">=2.9.3,<3"
 
 [feature.docs.tasks]
