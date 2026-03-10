@@ -1,9 +1,25 @@
+"""Grid mesh construction and manipulation for pocket detection.
+
+This module provides the [`GridMesh`][points.gridmesh.GridMesh] class, which represents a box of
+equidistant 3D points used during POVME's pocket-detection phase. The class
+supports:
+
+- Generating a regular grid that encompasses a protein's bounding box.
+- Removing points outside a convex hull.
+- Removing points that clash with protein atoms.
+- Filtering isolated points that lack sufficient neighbors.
+- Expanding the grid to higher resolution around surviving points.
+- Separating surviving points into distinct pockets.
+"""
+
+import math
 from typing import Any
 
 import numpy as np
 import numpy.typing as npt
 from loguru import logger
-from scipy import spatial
+from scipy.ndimage import label as ndimage_label
+from scipy.spatial import KDTree
 
 from povme.config import PocketVolumeConfig
 from povme.io import write_pdbs
@@ -28,49 +44,42 @@ class TaskRemovePointsOutsideHull(RayTaskGeneral):
         """
         try:
             hull, some_points = item
-            new_pts = [pt for pt in some_points if hull.inside_hull(pt)]
-            return np.array(new_pts)
+            if len(some_points) == 0:
+                return np.array([]).reshape(0, 3)
+
+            # Process all points against each triangle simultaneously.
+            inside = np.ones(len(some_points), dtype=bool)
+            epsilon = 1.0e-5
+
+            for triangle in hull.hull:
+                # Only test points still considered "inside"
+                candidate_idx = np.where(inside)[0]
+                if len(candidate_idx) == 0:
+                    break
+
+                candidate_pts = some_points[candidate_idx]
+
+                # Vector from triangle vertex 0 to each candidate point
+                rel_points = candidate_pts - triangle[0]  # (K, 3)
+
+                # Triangle edge vectors
+                vec1 = triangle[1] - triangle[0]  # (3,)
+                vec2 = triangle[2] - triangle[1]  # (3,)
+
+                # Outward-facing normal of this triangle face
+                cross = np.cross(vec1, vec2)  # (3,)
+
+                # Dot product: positive means the point is on the
+                # "outside" of this face
+                dots = rel_points @ cross  # (K,)
+
+                # Mark points outside this face as outside the hull
+                outside_mask = dots > epsilon
+                inside[candidate_idx[outside_mask]] = False
+
+            return some_points[inside]
         except Exception as e:
             logger.exception(f"Error in Removing Points Outside Hull: {e}")
-            return np.array([])  # Return empty array on error
-
-
-class TaskGetClosePoints(RayTaskGeneral):
-    """A class to identify box points that are near other, user-specified points."""
-
-    def process_item(
-        self, item: tuple[spatial.KDTree, float, npt.NDArray[np.float64]]
-    ) -> npt.NDArray[np.float64]:
-        """Identifies indices of box points close to other points.
-
-        Args:
-            item: A tuple containing:
-                - box_of_pts_distance_tree: KDTree of box points.
-                - dist_cutoff: The cutoff distance.
-                - other_points: Numpy array of other points.
-
-        Returns:
-            A numpy array of unique indices of box points that are within dist_cutoff.
-        """
-        try:
-            box_of_pts_distance_tree, dist_cutoff, other_points = item
-
-            # Create KDTree for other_points
-            other_points_distance_tree = spatial.KDTree(other_points)
-
-            # Find all box points within dist_cutoff of any other point
-            sparce_distance_matrix = other_points_distance_tree.sparse_distance_matrix(
-                box_of_pts_distance_tree, dist_cutoff
-            )
-
-            # Extract unique indices of box points that are close to other points
-            indices_of_box_pts_close_to_molecule_points = np.unique(
-                sparce_distance_matrix.tocsr().indices
-            )
-
-            return indices_of_box_pts_close_to_molecule_points
-        except Exception as e:
-            logger.exception(f"Error in Getting Close Points: {e}")
             return np.array([])  # Return empty array on error
 
 
@@ -96,7 +105,7 @@ class GridMesh:
         max_y = self.__snap_float(box[1][1], res) + 1.1 * res
         max_z = self.__snap_float(box[1][2], res) + 1.1 * res
 
-        x, y, z = np.mgrid[min_x:max_x:res, min_y:max_y:res, min_z:max_z:res]  # type: ignore
+        x, y, z = np.mgrid[min_x:max_x:res, min_y:max_y:res, min_z:max_z:res]
         self.points = np.array(list(zip(x.ravel(), y.ravel(), z.ravel())))
 
     def __snap_float(
@@ -123,7 +132,6 @@ class GridMesh:
             hull: The convex hull.
             config: Configuration object containing `n_cores`.
         """
-
         # Prepare input as list of tuples: (hull, some_points)
         chunks = [(hull, t) for t in np.array_split(self.points, config.n_cores)]
 
@@ -158,49 +166,33 @@ class GridMesh:
         dist_cutoff: float,
         config: PocketVolumeConfig,
     ) -> None:
-        """Removes all points in this box that come within the points specified
-        in a numpy array
+        """Remove grid points that are within a cutoff of protein atoms.
 
         Args:
-            other_points: A numpy array containing the other points.
-            dist_cutoff: A float, the cutoff distance to use in determining
-                whether or not box points will be removed.
-            config: Configuration object containing `n_cores`.
+            other_points: An `(m, 3)` array of protein-atom coordinates.
+            dist_cutoff: Grid points closer than this distance to any
+                atom are removed.
+            config: Configuration object (`n_cores`, `use_ray`).
         """
+        if len(self.points) == 0 or len(other_points) == 0:
+            return
 
-        # note, in newer versions of scipy use cKDTree
-        box_of_pts_distance_tree = spatial.KDTree(self.points)
+        # Build a single KDTree on the grid points
+        grid_tree = KDTree(self.points)
 
-        # Prepare input as list of tuples: (box_of_pts_distance_tree, dist_cutoff, t)
-        chunks = [
-            (box_of_pts_distance_tree, dist_cutoff, t)
-            for t in np.array_split(other_points, config.n_cores)
-        ]
+        # For each atom, find all grid points within dist_cutoff.
+        # query_ball_point on the atom array is efficient: one bulk call.
+        atom_tree = KDTree(other_points)
+        # pairs[i] is a list of grid-point indices close to atom i
+        close_pairs = atom_tree.query_ball_tree(grid_tree, r=dist_cutoff)
 
-        # Initialize RayManager with the appropriate task class
-        ray_manager = RayManager(
-            task_class=TaskGetClosePoints,
-            n_cores=config.n_cores,
-            use_ray=config.use_ray,
-        )
-        ray_manager.submit_tasks(items=chunks)
-        processed_chunks = ray_manager.get_results()
+        # Collect all unique grid-point indices that are too close
+        close_set = set()
+        for idx_list in close_pairs:
+            close_set.update(idx_list)
 
-        # Each element in processed_chunks is either a numpy array of indices or an error tuple
-        valid_indices = []
-        for result in processed_chunks:
-            if isinstance(result, tuple) and result[0] == "error":
-                logger.error(f"Error getting close points: {result[1]}")
-            else:
-                valid_indices.append(result)
-
-        if valid_indices:
-            indices_of_box_pts_close_to_molecule_points = np.unique(
-                np.hstack(valid_indices)
-            )
-            self.points = np.delete(
-                self.points, indices_of_box_pts_close_to_molecule_points, axis=0
-            )  # remove the ones that are too close to molecule atoms
+        if close_set:
+            self.points = np.delete(self.points, sorted(close_set), axis=0)
 
     def to_pdb(self, let="X"):
         """Converts the points in this box into a PDB representation.
@@ -212,41 +204,43 @@ class GridMesh:
             A PDB-formatted string.
 
         """
-
         return self.write_pdbs.numpy_to_pdb(self.points, let)
 
     def expand_around_existing_points(self, num_pts, reso):
         """Add points to the current box that surround existing points,
         essentially increasing the resolution of the box.
 
+        For each surviving grid point, new points are placed at all
+        integer multiples of `reso` within a cube of half-width
+        `num_pts x reso` centred on the original point. Duplicates are removed.
+
         Args:
             num_pts: An int, the number of points to place on each side of
                 the existing points, in the X, Y, and Z directions.
             res: The distance between adjacent added points.
-
         """
-
-        new_pts = []
-
         i = np.arange(-num_pts * reso, num_pts * reso + reso * 0.01, reso)
-        for xi in i:
-            for yi in i:
-                for zi in i:
-                    vec = np.array([xi, yi, zi])
-                    new_pts.append(self.points + vec)
-        self.points = np.vstack(new_pts)
 
+        # Generate all (K, 3) offset vectors at once
+        gx, gy, gz = np.meshgrid(i, i, i, indexing="ij")
+        offsets = np.column_stack([gx.ravel(), gy.ravel(), gz.ravel()])
+
+        # Broadcast: (1, N, 3) + (K, 1, 3) -> (K, N, 3) -> (K*N, 3)
+        all_new = (self.points[np.newaxis, :, :] + offsets[:, np.newaxis, :]).reshape(
+            -1, 3
+        )
+
+        self.points = all_new
         self.__unique_points()
 
     def __unique_points(self):
         """Identifies unique points (rows) in an array of points.
 
         Args:
-            a: A nx3 np.array representing 3D points.
+            a: A `n x 3` np.array representing 3D points.
 
         Returns:
-            A nx2 np.array containing the 3D points that are unique.
-
+            A `n x 2` np.array containing the 3D points that are unique.
         """
 
         b = np.ascontiguousarray(self.points).view(
@@ -259,125 +253,90 @@ class GridMesh:
         self.points = unique_points
 
     def filter_isolated_points_until_no_change(self, reso, number_of_neighbors):
-        """Keep removing points that don't have enough neighbors, until no
-        such points exist.
+        """Iteratively remove points with too few neighbors.
+
+        Points on the fringe of a pocket often have fewer grid neighbors
+        than points in the pocket interior.  This method repeatedly
+        removes any point with fewer than `number_of_neighbors` neighbors
+        (counted within the diagonal distance of one grid cell) until the
+        point set stabilizes.
 
         Args:
-            res: The distance between adjacent points.
+            res: The grid spacing. The neighbor cutoff is derived
+                as `reso x sqrt(3) x 1.1` to include diagonal (kitty-corner)
+                neighbors.
             number_of_neighbors: The minimum number of permissible neighbors.
-
         """
-
-        # calculate the pairwise distances between all box points note, in
-        # newer versions of scipy use cKDTree
-        box_of_pts_distance_tree = spatial.KDTree(self.points)
-
-        # so kiddy-corner counted as a neighbor
-        self.dist_matrix = box_of_pts_distance_tree.sparse_distance_matrix(
-            box_of_pts_distance_tree, reso * np.sqrt(3.0) * 1.1
-        ).todense()
-
-        # note that the diagnol of self.dist_matrix is zero, as expected, but
-        # ones with dist > reso * np.sqrt(3.0) * 1.1 are also 0. Pretty
-        # convenient.
+        cutoff = reso * math.sqrt(3.0) * 1.1
 
         num_pts = 0
-        # keep running the pass until there are no changes (points are stable)
         while num_pts != len(self.points):
             num_pts = len(self.points)
+            tree = KDTree(self.points)
 
-            # identify the points that have enough neighbors
-            columns_nonzero_count = np.array((self.dist_matrix != 0).sum(0))[0]
-            columns_nonzero_count_match_criteria = (
-                columns_nonzero_count >= number_of_neighbors
+            # Count neighbors for each point (subtract 1 to exclude self).
+            # return_length=True returns just the count, not the full
+            # neighbor lists, saving memory and time.
+            counts = (
+                np.asarray(
+                    tree.query_ball_point(self.points, r=cutoff, return_length=True),
+                    dtype=np.int64,
+                )
+                - 1
             )
-            columns_nonzero_count_match_criteria_index = np.nonzero(
-                columns_nonzero_count_match_criteria
-            )
 
-            self.__keep_limited_points(columns_nonzero_count_match_criteria_index)
-
-    def __keep_limited_points(self, pt_indices):
-        """A support function"""
-
-        # keep only those points
-        self.points = self.points[pt_indices]
-
-        # update the distance matrix so it doesn't need to be recalculated
-        self.dist_matrix = self.dist_matrix[pt_indices, :][0]
-        self.dist_matrix = self.dist_matrix.T
-        self.dist_matrix = self.dist_matrix[pt_indices, :][0]
-        # self.dist_matrix = self.dist_matrix.T # not necessary because it's a symetrical matrix
+            keep_mask = counts >= number_of_neighbors
+            self.points = self.points[keep_mask]
 
     def separate_out_pockets(self) -> list[npt.NDArray[np.float64]]:
-        """Separate the points according to the pocket they belong to.
-        Determined by looking at patches of contiguous points.
+        """Partition surviving points into distinct pockets.
+
+        Two points belong to the same pocket if they are connected through
+        a chain of grid neighbors (26-connectivity, i.e., including
+        diagonal/kitty-corner neighbors).
+
+        1. Points are mapped to integer ``(i, j, k)`` indices by
+            subtracting the grid minimum and dividing by the grid spacing.
+        2. A 3D boolean volume is constructed and filled at the
+            appropriate indices.
+        3. [`scipy.ndimage.label`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.ndimage.label.html)
+            performs connected-component
+            labelling with 26-connectivity.
+        4. Each connected component is extracted as a separate pocket.
 
         Returns:
-            A list of point arrays, each array corresponding to the points of a
-                separate pocket.
-
+            A list of `(n_i, 3)` arrays, one per pocket, sorted in
+                descending order of point count (largest pocket first).
         """
 
-        all_pockets = []
+        # Infer the grid spacing from the minimum nonzero pairwise distance
+        # along any single axis.  Since points are on a regular grid, the
+        # smallest positive coordinate difference equals the spacing.
+        diffs_x = np.diff(np.unique(np.round(self.points[:, 0], 8)))
+        reso = float(diffs_x[diffs_x > 1e-9].min()) if len(diffs_x) > 0 else 1.0
 
-        # self.points is an array of 3D points
+        # Map to integer grid indices
+        grid_min = np.min(self.points, axis=0)
+        indices = np.round((self.points - grid_min) / reso).astype(int)
+        shape = tuple(indices.max(axis=0) + 1)
 
-        # self.dist_matrix is a distance matrix. self.dist_matrix[i,j] is
-        # distance between points i and j. But it only contains distances if
-        # the points are close (neighbors). Otherwise, 0.
+        # Build 3-D boolean volume
+        volume = np.zeros(shape, dtype=bool)
+        volume[indices[:, 0], indices[:, 1], indices[:, 2]] = True
 
-        # Keep going until there are no more points that need to be assigned
-        # to a pocket.
-        while len(self.points) != 0:
-            pocket_indexes = np.array([0])
-            num_pts_in_pocket = 0
+        # Connected-component labelling with 26-connectivity
+        struct = np.ones((3, 3, 3), dtype=int)
+        labels_3d, n_components = ndimage_label(volume, structure=struct)
 
-            # Keep looping into no new unique pockets are added.
-            while num_pts_in_pocket != len(pocket_indexes):
-                num_pts_in_pocket = len(pocket_indexes)
+        # Map labels back to the original point array
+        point_labels = labels_3d[indices[:, 0], indices[:, 1], indices[:, 2]]
 
-                # Get all the adjacent points
-                indices_of_neighbors = np.nonzero(self.dist_matrix[pocket_indexes, :])[
-                    1
-                ]
+        pockets: list[npt.NDArray[np.float64]] = []
+        for label_id in range(1, n_components + 1):
+            pocket_pts = self.points[point_labels == label_id]
+            pockets.append(pocket_pts)
 
-                # Get one of them. Not sure why this was previously in the code...
-                # if len(indices_of_neighbors) > 0:
-                # In case a point has no neighbors, you need this conditional.
-                # one_index_of_neighbor = np.array(indices_of_neighbors)[0]
+        # Sort by size, largest first (matches original behavior)
+        pockets.sort(key=lambda p: -len(p))
 
-                # Add that one index to the growing list.
-                pocket_indexes = np.hstack(
-                    (
-                        pocket_indexes,
-                        indices_of_neighbors,
-                        # one_index_of_neighbor  # Not sure why it used to be this.
-                    )
-                )
-
-                # Make sure only unique indices ones are retained.
-                pocket_indexes = np.unique(pocket_indexes)
-
-            # Save these points (in the pocket) to a list of pockets.
-            pocket = self.points[pocket_indexes, :]
-            all_pockets.append(pocket)
-
-            # Remove those points from the list of points before trying again.
-            self.__delete_limited_points(pocket_indexes)
-
-        # sort the pockets by size
-        all_pockets = sorted(all_pockets, key=lambda pts: -len(pts))
-
-        return all_pockets
-
-    def __delete_limited_points(self, pt_indices):
-        """A support function"""
-
-        # keep only those points
-        self.points = np.delete(self.points, pt_indices, axis=0)
-
-        # update the distance matrix so it doesn't need to be recalculated
-        self.dist_matrix = np.delete(self.dist_matrix, pt_indices, axis=0)
-        self.dist_matrix = self.dist_matrix.T
-        self.dist_matrix = np.delete(self.dist_matrix, pt_indices, axis=0)
+        return pockets
