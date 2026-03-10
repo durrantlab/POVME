@@ -1,8 +1,9 @@
 """3-D region definitions for POVME inclusion, exclusion, and seed volumes.
 
-This module defines the abstract :class:`Region` base class and two concrete
-implementations, :class:`SphericalRegion` and :class:`RectangularRegion`,
-that generate regular grids of 3-D points filling a geometric volume.  These
+This module defines the abstract [`Region`][points.regions.Region] base class and two concrete
+implementations, [`SphericalRegion`][points.regions.SphericalRegion] and
+[`RectangularRegion`][points.regions.RectangularRegion],
+that generate regular grids of 3D points filling a geometric volume. These
 regions are used throughout POVME to specify:
 
 - Inclusion regions: the volume to search for pockets.

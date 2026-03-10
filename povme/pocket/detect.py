@@ -1,14 +1,14 @@
 """Automatic pocket detection from a static protein structure.
 
-This module provides the :class:`PocketDetector` class, which implements the
+This module provides the [`PocketDetector`][pocket.detect.PocketDetector] class, which implements the
 pocket-identification pipeline:
 
 1. Load a PDB structure and strip hydrogen atoms.
 2. Compute the convex hull of alpha carbon positions.
 3. Fill the hull with a coarse grid of equidistant points, progressively
-   refining the resolution.
+    refining the resolution.
 4. Remove grid points that clash with protein atoms.
-5. Filter isolated points that lack sufficient neighbours.
+5. Filter isolated points that lack sufficient neighbors.
 6. Partition the remaining points into distinct pockets.
 7. Cluster each pocket with k-means and output encompassing spheres.
 """
