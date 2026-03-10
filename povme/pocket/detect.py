@@ -1,10 +1,24 @@
+"""Automatic pocket detection from a static protein structure.
+
+This module provides the :class:`PocketDetector` class, which implements the
+pocket-identification pipeline:
+
+1. Load a PDB structure and strip hydrogen atoms.
+2. Compute the convex hull of alpha carbon positions.
+3. Fill the hull with a coarse grid of equidistant points, progressively
+   refining the resolution.
+4. Remove grid points that clash with protein atoms.
+5. Filter isolated points that lack sufficient neighbours.
+6. Partition the remaining points into distinct pockets.
+7. Cluster each pocket with k-means and output encompassing spheres.
+"""
+
 import os
 
 import numpy as np
 from loguru import logger
 from pymolecule import Molecule
 from scipy.cluster.vq import ClusterError, kmeans2
-from scipy.spatial.distance import cdist
 
 from povme.config import PocketDetectConfig
 from povme.io import openfile, write_pdbs
@@ -37,20 +51,20 @@ class PocketDetector:
             output_dirname = os.path.dirname(output_prefix)
             os.makedirs(output_dirname, exist_ok=True)
 
-        # Step 1: Load in the protein
+        # Load in the protein
 
         logger.info("Loading the PDB file " + path_pdb + "...")
         molecule = Molecule()
         molecule.io.load_pdb_into(path_pdb)
 
-        # Step 2: Get rid of hydrogen atoms. They just slow stuff down.
+        # Get rid of hydrogen atoms. They just slow stuff down.
 
         print("Removing hydrogen atoms...")
         sel = molecule.selections.select_atoms({"element_stripped": b"H"})
         sel = molecule.selections.invert_selection(sel)
         molecule = molecule.selections.get_molecule_from_selection(sel)
 
-        # Step 3: Calculate the convex hull of the protein alpha carbons.
+        # Calculate the convex hull of the protein alpha carbons.
         print("Calculating the convex hull of the PDB file...")
 
         # Get a version of the protein with just the alpha carbons. In my
@@ -63,7 +77,7 @@ class PocketDetector:
             molecule_alpha_carbons.information.get_coordinates()
         )
 
-        # Step 4. Get a box of equispaced points that surround the protein,
+        # Get a box of equispaced points that surround the protein,
         # snapped to reso. I'm putting a whole bunch of other functions in this
         # class as well to manipulate the points of this box.
 
@@ -80,7 +94,7 @@ class PocketDetector:
             config.pocket_detection_resolution * 4,
         )
 
-        # Step 5. Remove points outside the convex hull. Gradually fill in
+        # Remove points outside the convex hull. Gradually fill in
         # protein-occupying region with denser point fields. Faster this way, I
         # think.
         logger.info("Removing points that fall outside the protein's convex hull...")
@@ -102,7 +116,7 @@ class PocketDetector:
             molecule.information.get_coordinates(), config.clashing_cutoff, config
         )
 
-        # Step 7. Now surround each of these points with higher density points
+        # Now surround each of these points with higher density points
         # that in the same regions. This is for getting a more detailed view of
         # the identified pockets.
         if config.pocket_measuring_resolution != config.pocket_detection_resolution:
@@ -127,7 +141,7 @@ class PocketDetector:
                 molecule.information.get_coordinates(), config.clashing_cutoff, config
             )
 
-        # Step 8. Now start doing a repeated pass filter (keep repeating until no
+        # Now start doing a repeated pass filter (keep repeating until no
         # change). Don't know if this is a high pass or low pass filter. I've
         # heard these terms, though, and they sound cool.
         logger.info(
@@ -139,11 +153,11 @@ class PocketDetector:
             config.pocket_measuring_resolution, config.n_neighbors
         )
 
-        # Step 9. Separate out the pockets so they can be considered in isolation.
+        # Separate out the pockets so they can be considered in isolation.
         logger.info("Partitioning the remaining points by pocket...")
         all_pockets = box_pts.separate_out_pockets()
 
-        # Step 10. Get povme spheres that encompass each pocket, write pockets to
+        # Get povme spheres that encompass each pocket, write pockets to
         # separate pdb files
         logger.info("Saving the points of each pocket...")
         let_ids = [
@@ -213,8 +227,9 @@ class PocketDetector:
                 cluster_pts = pts[indexes_for_this_cluster]
                 cluster_center = np.mean(cluster_pts, axis=0)
                 try:
-                    cluster_radius = np.max(
-                        cdist(np.array([cluster_center]), cluster_pts)
+                    diffs = cluster_pts - cluster_center
+                    cluster_radius = float(
+                        np.max(np.sqrt(np.einsum("ij,ij->i", diffs, diffs)))
                     )
                     f.write(
                         "REMARK CHAIN "
