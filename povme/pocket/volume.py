@@ -1,3 +1,16 @@
+"""Pocket volume calculation for single structures and MD trajectories.
+
+This module provides the [`PocketVolume`][pocket.volume.PocketVolume] class, which orchestrates
+the end-to-end POVME volume-measurement workflow:
+
+1. Generate (or load) the pocket-encompassing point field from
+   user-defined inclusion/exclusion regions.
+2. Distribute per-frame volume calculations across workers using
+    [`RayManager`][parallel.RayManager].
+3. Collect results and optionally write trajectory PDBs and volumetric
+    density maps.
+"""
+
 import os
 import sys
 import time
@@ -7,7 +20,6 @@ from typing import Any, Generator
 import numpy as np
 from loguru import logger
 from pymolecule import Molecule
-from scipy.spatial.distance import cdist
 
 from povme.config import PocketVolumeConfig
 from povme.io import dx_freq, gzopenfile, numpy_to_pdb, openfile, write_to_file
@@ -18,28 +30,79 @@ from povme.points.regions import collect_regions
 
 
 def get_unique_rows(a):
-    """Identifies unique points (rows) in an array of points.
+    """Return the unique rows of a 2-D array.
 
-    Arguments:
-        a: A nx3 numpy.array representing 3D points.
+    Each row is treated as an opaque byte string so that
+    [`numpy.unique`](https://numpy.org/doc/stable/reference/generated/numpy.unique.html)
+    can identify duplicates without floating-point
+    tolerance issues (the input is assumed to be snapped to a grid).
+
+    Args:
+        a: An array of shape `(n, d)` (typically `d = 3`).
 
     Returns:
-        A nx2 numpy.array containing the 3D points that are unique.
-
+        An array of shape `(m, d)` (`m <= n`) containing only the
+        unique rows, in sorted order.
     """
-
     a[a == -0.0] = 0.0
     b = np.ascontiguousarray(a).view(np.dtype((np.void, a.dtype.itemsize * a.shape[1])))
     return np.unique(b).view(a.dtype).reshape(-1, a.shape[1])  # unique_a
 
 
+def remove_exclusion_points(
+    pts: np.ndarray,
+    pts_exclusion: np.ndarray,
+) -> np.ndarray:
+    """Remove inclusion points that coincide with exclusion points.
+
+    Both point sets are assumed to lie on the same regular grid (i.e., their
+    coordinates are exact multiples of the grid spacing after snapping).
+    Instead of computing a full pairwise distance matrix with
+    [`cdist`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.distance.cdist.html),
+    this function performs a set-difference using NumPy's structured-array view trick.
+
+    1. Each `(x, y, z)` row is reinterpreted as a single opaque
+        [`np.void`](https://numpy.org/doc/stable/reference/arrays.scalars.html) element.
+    2. [`numpy.isin`](https://numpy.org/doc/stable/reference/generated/numpy.isin.html)
+        performs a hash-based membership test.
+
+    Args:
+        pts: An `(N, 3)` array of inclusion grid points.
+        pts_exclusion: An `(M, 3)` array of exclusion grid points.
+
+    Returns:
+        An `(K, 3)` array (`K <= N`) containing only those rows of
+            `pts` that do not appear in *pts_exclusion*.
+    """
+
+    def _to_void(a: np.ndarray) -> np.ndarray:
+        """View each row of a 2-D array as a single void element."""
+        a = np.ascontiguousarray(a)
+        return a.view(np.dtype((np.void, a.dtype.itemsize * a.shape[1])))
+
+    pts_void = _to_void(pts)
+    exc_void = _to_void(pts_exclusion)
+    mask = ~np.isin(pts_void, exc_void).ravel()
+    return pts[mask]
+
+
 def collect_pdb_frames_in_chunks(
     filename: str, chunk_size: int
 ) -> Generator[list[tuple[int, str]], None, None]:
-    """
-    Read a multi-frame PDB and yield frames in chunks.
+    """Read a multi-frame PDB and yield frames in chunks.
 
-    Each yielded chunk is a list of (frame_index, pdb_frame_string).
+    Frames are delimited by lines starting with `END`. Frames are
+    accumulated into chunks of `chunk_size` before being yielded, reducing
+    the overhead of task submission when using parallel workers.
+
+    Args:
+        filename: Path to the multi-frame PDB file.
+        chunk_size: Maximum number of frames per yielded chunk.
+
+    Yields:
+        Lists of `(frame_index, pdb_frame_string)` tuples. The
+            `frame_index` is 1-based. The final yielded chunk may contain
+            fewer than *chunk_size* frames.
     """
     frame_buffer: list[str] = []
     frame_index = 0
@@ -113,9 +176,23 @@ class PocketVolume:
         self.config = config
 
     def gen_points(self, config):
+        """Generate the pocket-encompassing point field.
+
+        Constructs a regular grid of 3D points by unioning all
+        inclusion-region grids and then subtracting all exclusion-region
+        grids.
+
+        Args:
+            config: The volume-calculation configuration, which specifies
+                inclusion/exclusion spheres and boxes and the grid spacing.
+
+        Returns:
+            An `(K, 3)` array of unique grid points that lie inside at
+                least one inclusion region and outside all exclusion regions.
+        """
         logger.info("Generating the pocket-encompassing point field")
 
-        # get all the points of the inclusion regions
+        # Collect inclusion points
         regions_include = collect_regions(
             config.points_inclusion_sphere, config.points_inclusion_box
         )
@@ -124,7 +201,7 @@ class PocketVolume:
             pts = np.vstack((pts, Included.get_points(config.grid_spacing)))
         pts = get_unique_rows(pts)
 
-        # get all the points of the exclusion regions
+        # Collect exclusion points and subtract them
         regions_exclude = collect_regions(
             config.points_exclusion_sphere, config.points_exclusion_box
         )
@@ -136,12 +213,7 @@ class PocketVolume:
                 )
             pts_exclusion = get_unique_rows(pts_exclusion)
 
-            # remove the exclusion points from the inclusion points I
-            # think there ought to be a set-based way of doing this, but
-            # I'm going to go for the pairwise comparison. consider
-            # rewriting later
-            index_to_remove = np.nonzero(cdist(pts, pts_exclusion) < 1e-7)[0]
-            pts = np.delete(pts, index_to_remove, axis=0)
+            pts = remove_exclusion_points(pts, pts_exclusion)
 
         return pts
 
