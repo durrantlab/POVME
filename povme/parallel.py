@@ -71,7 +71,6 @@ the results for further inspection.
 
 """
 
-import os
 from abc import ABC, abstractmethod
 from collections.abc import Callable, Generator
 from typing import Any
