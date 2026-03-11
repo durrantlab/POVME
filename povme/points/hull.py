@@ -1,12 +1,22 @@
+"""Convex hull construction and per-frame pocket volume computation.
+
+This module contains the [`ConvexHull`][points.hull.ConvexHull] class used for two distinct
+purposes in POVME:
+
+1. Pocket detection by building a convex hull around the protein so that
+   grid points outside the protein surface can be discarded.
+2. Per-frame volume calculation that removes grid points that clash with receptor atoms,
+    optionally excludes points outside the convex hull, enforces pocket contiguity,
+    and computes the final pocket volume.
+"""
+
 import math
-import time
 from functools import reduce
 
 import numpy as np
 import numpy.typing as npt
 from loguru import logger
-from scipy.spatial import cKDTree
-from scipy.spatial.distance import cdist, pdist, squareform
+from scipy.spatial import Delaunay, KDTree
 
 from povme.io import gzopenfile, numpy_to_pdb, openfile, write_to_file
 from povme.parallel import RayTaskGeneral
@@ -20,12 +30,145 @@ def unique_rows(a):
 
     Returns:
         A nx2 np.array containing the 3D points that are unique.
-
     """
-
     a[a == -0.0] = 0.0
     b = np.ascontiguousarray(a).view(np.dtype((np.void, a.dtype.itemsize * a.shape[1])))
     return np.unique(b).view(a.dtype).reshape(-1, a.shape[1])  # unique_a
+
+
+def _count_neighbors_kdtree(
+    pts: npt.NDArray[np.float64],
+    cutoff_dist: float,
+) -> npt.NDArray[np.int64]:
+    """Count the number of neighboring points within a cutoff distance.
+
+    Args:
+        pts: An array of shape `(n, 3)`. The points whose neighbors we
+            want to count.
+        cutoff_dist: The maximum Euclidean distance at which two points are
+            considered neighbors.
+
+    Returns:
+        An integer array of shape `(n,)` where element $i$ is the number
+            of other points within `cutoff_dist` of `pts[i]` (i.e., the
+            point itself is not counted as its own neighbor).
+    """
+    tree = KDTree(pts)
+    # return_length=True avoids building explicit neighbor lists,
+    # returning just the count — this is faster and uses less memory.
+    counts = tree.query_ball_point(pts, r=cutoff_dist, return_length=True)
+    return np.asarray(counts, dtype=np.int64) - 1  # subtract self
+
+
+def flood_fill_contiguous_kdtree(
+    pts: npt.NDArray[np.float64],
+    contig_seed_pts: npt.NDArray[np.float64],
+    grid_spacing: float,
+) -> npt.NDArray[np.float64]:
+    """Identify pocket points contiguous with a seed region using BFS.
+
+    1. Builds a single [`KDTree`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.KDTree.html)
+        over all surviving pocket points.
+    2. Pre-computes the full neighbor-list for every point in one
+        `query_ball_point` call, stored as a Python list of
+        lists.
+    3. Finds which pocket points coincide with seed points using a second
+        KD-tree query.
+    4. Runs a breadth-first search (BFS) over the neighbor graph, expanding
+        from the seed set.
+
+    Args:
+        pts: An array of shape `(n, 3)` containing the surviving pocket points
+            (already pruned by clash detection and neighbor filtering).
+        contig_seed_pts: An array of shape `(m, 3)` containing the grid points
+            inside the user-defined contiguous-pocket seed region(s).
+        grid_spacing: The POVME grid spacing in Angstroms. Used to
+            derive the neighbor cutoff (diagonal of a grid cell).
+
+    Returns:
+        An array of shape `(k, 3)` containing the subset of *pts* that
+            are reachable from the seed region through contiguous grid
+            neighbors.  Returns an empty array if no seed points overlap with
+            surviving pocket points.
+    """
+    if len(pts) == 0 or len(contig_seed_pts) == 0:
+        return np.array([]).reshape(0, 3)
+
+    cutoff_dist = grid_spacing * 1.01 * math.sqrt(3)
+
+    tree = KDTree(pts)
+
+    # Find which pocket points coincide with seed points
+    seed_tree = KDTree(contig_seed_pts)
+    seed_matches = seed_tree.query_ball_tree(tree, r=1e-5)
+    frontier = set()
+    for matches in seed_matches:
+        frontier.update(matches)
+
+    if not frontier:
+        return np.array([]).reshape(0, 3)
+
+    # Pre-compute neighbor lists for all pocket points
+    all_neighbors = tree.query_ball_point(pts, r=cutoff_dist)
+
+    # BFS expansion from seed set
+    visited = set(frontier)
+    while frontier:
+        new_frontier = set()
+        for idx in frontier:
+            for neighbor_idx in all_neighbors[idx]:
+                if neighbor_idx not in visited:
+                    visited.add(neighbor_idx)
+                    new_frontier.add(neighbor_idx)
+        frontier = new_frontier
+
+    return pts[sorted(visited)]
+
+
+def _vectorized_hull_check(
+    pts: npt.NDArray[np.float64],
+    hull_triangles: list[npt.NDArray[np.float64]],
+    epsilon: float = 1.0e-5,
+) -> npt.NDArray[np.float64]:
+    """Vectorized convex-hull inside/outside test.
+
+    This version processes all points against each triangle
+    simultaneously using NumPy array operations. An early-exit optimization skips
+    points already classified as "outside" in subsequent triangle iterations.
+
+    Args:
+        pts: An array of shape `(n, 3)` containing the candidate points.
+        hull_triangles: A list of $T$ triangles, each a `(3, 3)` array
+            whose rows are the triangle's three vertices. The vertices are
+            ordered so that the outward-facing normal is given by the cross
+            product of edges 0 -> 1 and 1 -> 2.
+        epsilon: Floating-point tolerance for the inside/outside dot-product
+            test. A point is deemed "outside" a triangle's half-space when
+            the dot product exceeds this value.
+
+    Returns:
+        An array of shape `(m, 3)` (`m <= n`) containing only the
+            points that lie inside (or on the surface of) the convex hull.
+    """
+    inside = np.ones(len(pts), dtype=bool)
+
+    for triangle in hull_triangles:
+        if not inside.any():
+            break
+
+        candidate_idx = np.where(inside)[0]
+        candidate_pts = pts[candidate_idx]
+
+        rel_points = candidate_pts - triangle[0]
+        vec1 = triangle[1] - triangle[0]
+        vec2 = triangle[2] - triangle[1]
+        cross = np.cross(vec1, vec2)
+
+        dots = rel_points @ cross
+        outside_mask = dots > epsilon
+        inside[candidate_idx[outside_mask]] = False
+
+    return pts[inside]
 
 
 class ConvexHull:
@@ -63,7 +206,6 @@ class ConvexHull:
         Returns:
             If `seg_index` exists in the keys of `seg_dict`, return the value.
                 Otherwise, return 0.
-
         """
         # we want the index with the greater x-value, so we don't get
         # identical segments in the dictionary more than once
@@ -115,7 +257,6 @@ class ConvexHull:
                 rows describe the location of the 3 corners of the triangle. Each
                 of the 3 points are arranged so that a cross product will point
                 outwards from the hull.
-
         """
 
         n = np.shape(raw_points)[0]  # number of points
@@ -124,9 +265,9 @@ class ConvexHull:
         xaxis = np.array([1, 0, 0])
         maxx = raw_points[0][0]  # initiate highest x value
         points = []  # a list of tuples for easy dictionary lookup
-        seg_dict: dict[tuple[tuple[np.float64, ...], ...], int] = (
-            {}
-        )  # a dictionary that contains the number of triangles a seg is in
+        seg_dict: dict[
+            tuple[tuple[np.float64, ...], ...], int
+        ] = {}  # a dictionary that contains the number of triangles a seg is in
 
         for i in range(n):  # find the n with the largest x value
             point = tuple(raw_points[i])
@@ -168,7 +309,6 @@ class ConvexHull:
         while (
             seg_list
         ):  # as long as there are unexplored edges of triangles in the hull...
-
             counter += 1
             seg = seg_list.pop()  # take a segment out of the seg_list
             tuple1 = seg[0]  # the two ends of the segment
@@ -187,9 +327,9 @@ class ConvexHull:
             best_point = None
 
             for i in range(n):  # look at each point
-
                 pointi = raw_points[i]
-                # if np.array_equal(pointi, point1) or np.array_equal(pointi, point2): continue # if we are trying one of the points that are point1 or point2
+                # if np.array_equal(pointi, point1) or np.array_equal(pointi, point2):
+                # continue if we are trying one of the points that are point1 or point2
                 diff_vec1 = point2 - point1
                 # diff_len1 = np.linalg.norm(diff_vec1)
                 diff_vec2 = pointi - point2
@@ -221,10 +361,10 @@ class ConvexHull:
                 if dot_cross > best_dot_cross:
                     best_cross = test_cross
                     best_dot_cross = dot_cross
-                    best_point = pointi
+                    # best_point = pointi  # Not used, so commented out
                     tuple3 = points[i]
 
-            point3 = best_point
+            # point3 = best_point  # Not used, so commented out
 
             if self.get_seg_dict_num(seg_dict, (tuple2, tuple1)) > 2:
                 continue
@@ -268,7 +408,6 @@ class ConvexHull:
         Returns:
             All members of original set of points that fall outside the
                 Akl-Toussaint octahedron.
-
         """
 
         x_high = (-1e99, 0, 0)
@@ -343,9 +482,7 @@ class ConvexHull:
             # cross product between vec1 and vec2
             our_cross = np.cross(vec1, vec2)
             # dot product to determine whether cross is point inward or
-            # outward
-            our_dot = np.dot(rel_point, our_cross)
-            # if the dot is greater than 0, then its outside
+            # outward if the dot is greater than 0, then its outside
             if np.dot(rel_point, our_cross) > epsilon:
                 return True
 
@@ -366,6 +503,40 @@ class ConvexHull:
 
     @staticmethod
     def volume(frame_indx, pdb, pts, regions_contig, output_prefix, config):
+        """Compute the pocket volume for a single trajectory frame.
+
+        1. Discard receptor atoms too far from the grid to matter.
+        2. Build a [`KDTree`](https://docs.scipy.org/doc/scipy/reference/generated/scipy.spatial.KDTree.html) on the remaining atom
+           coordinates and use `query_ball_point` to identify grid points
+           that clash with any atom's van der Waals sphere (plus
+           `config.distance_cutoff`).
+        3. Optionally exclude points outside the convex hull of non-hydrogen
+           receptor atoms.
+        4. Optionally enforce contiguous-pocket constraints using a
+           KD-tree-based BFS flood fill.
+        5. Compute the volume as `N_surviving_points x grid_spacing^3`.
+
+        Args:
+            frame_indx: 1-based frame index within the trajectory.
+            pdb: A `pymolecule.Molecule` instance holding one frame.
+            pts: An `(N, 3)` array of grid points defining the
+                pocket-encompassing region.
+            regions_contig: A list of [`Region`][points.regions.Region]
+                objects defining the contiguous-pocket seed region(s).
+                May be empty if contiguity is not enforced.
+            output_prefix: Directory/filename prefix for output files.
+            config: A [`PocketVolumeConfig`][config.PocketVolumeConfig] instance
+                controlling algorithmic parameters.
+
+        Returns:
+            The input frame index (for bookkeeping).
+
+            The pocket volume.
+
+            A dict that may contain the key
+                `"SaveVolumetricDensityMap"` mapping to the surviving
+                point array (if the user requested a density map).
+        """
         # if the user wants to save empty points (points that are removed),
         # then we need a copy of the original
         if config.output_equal_num_points_per_frame:
@@ -404,7 +575,7 @@ class ConvexHull:
         vdw[element_stripped == b"S"] = 1.8
 
         # Create a KD-tree for atom coordinates
-        atom_tree = cKDTree(coords)
+        atom_tree = KDTree(coords)
 
         # Compute the maximum cutoff for searching
         # Since each atom might have a different vdw radius, we must take the max
@@ -435,61 +606,38 @@ class ConvexHull:
         # now keep the appropriate points
         pts = np.delete(pts, close_pt_indices, axis=0)
 
-        # exclude points outside convex hull
         if config.convex_hull_exclusion:
-            convex_hull_3d = ConvexHull(pts)
-
-            # get the coordinates of the non-hydrogen atoms (faster to discard
-            # hydrogens)
             hydros = pdb.selections.select_atoms({"element_stripped": [b"H"]})
             not_hydros = pdb.selections.invert_selection(hydros)
             not_hydros_coors = pdb.information.coordinates[not_hydros]
 
-            # not_hydros = pdb.selections.select_atoms({'name_stripped':['CA']})
-            # not_hydros_coors = pdb.information.coordinates[not_hydros]
-
-            # modify pts here.
-            # note that the atoms of the pdb frame are in pdb.information.coordinates
-            # begintime = time.time() # measure execution time
-            akl_toussaint_pts = convex_hull_3d.akl_toussaint(
-                not_hydros_coors
-            )  # quickly reduces input size
-            # print "akl Toussaint:", time.time() - begintime
-            begintime = time.time()  # measure execution time
-            # calculate convex hull using gift wrapping algorithm
-            hull = convex_hull_3d.gift_wrapping_3d(akl_toussaint_pts)
-            # print "gift_wrapping:", time.time() - begintime
-
-            # we will need to regenerate the pts list, disregarding those
-            # outside the hull
-            old_pts = pts
-            pts = []
-            for pt in old_pts:
-                pt_outside = convex_hull_3d.outside_hull(
-                    pt, hull
-                )  # check if pt is outside hull
-                if not pt_outside:
-                    # if its not outside the hull, then include it in the
-                    # volume measurement
-                    pts.append(pt)
-            pts = np.array(pts)
+            # Delaunay-based check (fastest, ~100x vs Python loop)
+            # Uses scipy's C-level Delaunay triangulation. A point is inside
+            # the convex hull iff find_simplex returns a non-negative index.
+            try:
+                delaunay_hull = Delaunay(not_hydros_coors)
+                inside_mask = delaunay_hull.find_simplex(pts) >= 0
+                pts = pts[inside_mask]
+            except Exception:
+                # Fallback: original gift-wrapping + vectorized check
+                logger.debug(
+                    "Delaunay hull failed (likely degenerate geometry), "
+                    "falling back to gift-wrapping."
+                )
+                convex_hull_3d = ConvexHull(pts)
+                akl_toussaint_pts = convex_hull_3d.akl_toussaint(not_hydros_coors)
+                hull = convex_hull_3d.gift_wrapping_3d(akl_toussaint_pts)
+                pts = _vectorized_hull_check(pts, hull)
 
         # Now, enforce contiguity if needed
         if len(regions_contig) > 0 and len(pts) > 0:
-            # first, for each point, determine how many neighbors it has to
-            # count kiddy-corner points too
             cutoff_dist = config.grid_spacing * 1.01 * math.sqrt(3)
-            pts_dists = squareform(pdist(pts))
-            # minus 1 because an atom shouldn't be considered its own neighor
-            neighbor_counts = np.sum(pts_dists < cutoff_dist, axis=0) - 1
 
-            # remove all the points that don't have enough neighbors
-            pts = pts[
-                np.nonzero(neighbor_counts >= config.contiguous_points_criteria)[0]
-            ]
+            # Remove isolated points (too few neighbors)
+            neighbor_counts = _count_neighbors_kdtree(pts, cutoff_dist)
+            pts = pts[neighbor_counts >= config.contiguous_points_criteria]
 
-            # get all the points in the defined parameters['ContiguousPocket']
-            # seed regions
+            # Flood fill from seed region
             contig_pts = regions_contig[0].get_points(config.grid_spacing)
             for Contig in regions_contig[1:]:
                 contig_pts = np.vstack(
@@ -497,32 +645,17 @@ class ConvexHull:
                 )
             contig_pts = unique_rows(contig_pts)
 
-            try:  # error here if there are no points of contiguous seed region outside of protein volume.
-                # now just get the ones that are not near the protein
-                contig_pts = pts[np.nonzero(cdist(contig_pts, pts) < 1e-7)[1]]
-
-                last_size_of_contig_pts = 0
-                while last_size_of_contig_pts != len(contig_pts):
-                    last_size_of_contig_pts = len(contig_pts)
-
-                    # now get the indices of all points that are close to the
-                    # contig_pts
-                    all_pts_close_to_contig_pts_boolean = (
-                        cdist(pts, contig_pts) < cutoff_dist
-                    )
-                    index_all_pts_close_to_contig_pts = np.unique(
-                        np.nonzero(all_pts_close_to_contig_pts_boolean)[0]
-                    )
-                    contig_pts = pts[index_all_pts_close_to_contig_pts]
-
-                pts = contig_pts
+            try:
+                pts = flood_fill_contiguous_kdtree(pts, contig_pts, config.grid_spacing)
             except Exception:
                 logger.exception(
                     "Frame "
                     + str(frame_indx)
-                    + ": None of the points in the contiguous-pocket seed region\n\t\tare outside the volume of the protein! Assuming a pocket\n\t\tvolume of 0.0 A."
+                    + ": None of the points in the contiguous-pocket seed "
+                    "region\n\t\tare outside the volume of the protein! "
+                    "Assuming a pocket\n\t\tvolume of 0.0 A."
                 )
-                pts = np.array([])
+                pts = np.array([]).reshape(0, 3)
 
         # now write the pdb and calculate the volume
         volume = len(pts) * math.pow(config.grid_spacing, 3)
@@ -584,7 +717,6 @@ class TaskCalcVolume(RayTaskGeneral):
             A tuple with frame index, calculated volume, and any extra data.
         """
         try:
-
             return ConvexHull.volume(*item)
         except Exception as e:
             logger.exception(f"Error in frame {item[0]}: {e}")

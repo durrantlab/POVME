@@ -1,6 +1,6 @@
 [project]
 name = "povme"
-version = "2.2.1"
+version = "2.2.2"
 description = "Detect and characterize protein pockets."
 authors = [
     {name = "Durrant Lab", email = "durrantj@pitt.edu"}

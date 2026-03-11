@@ -1,8 +1,21 @@
+"""3-D region definitions for POVME inclusion, exclusion, and seed volumes.
+
+This module defines the abstract [`Region`][points.regions.Region] base class and two concrete
+implementations, [`SphericalRegion`][points.regions.SphericalRegion] and
+[`RectangularRegion`][points.regions.RectangularRegion],
+that generate regular grids of 3D points filling a geometric volume. These
+regions are used throughout POVME to specify:
+
+- Inclusion regions: the volume to search for pockets.
+- Exclusion regions: sub-volumes to explicitly ignore.
+- Contiguous-pocket seed regions: small volumes placed inside the pocket
+    of interest so that only the contiguous pocket is retained.
+"""
+
 from abc import ABC, abstractmethod
 
 import numpy as np
 import numpy.typing as npt
-from scipy.spatial.distance import cdist
 
 
 def snap_points(points: npt.NDArray[np.float64], res: float) -> npt.NDArray[np.float64]:
@@ -148,16 +161,17 @@ class SphericalRegion(Region):
         )
 
     def get_points(self, res: float) -> npt.NDArray[np.float64]:
-        """
-        Generates a grid of points filling the spherical region.
+        """Generate grid points filling the sphere.
+
+        A cubic grid spanning `[center - radius, center + radius]` is
+        constructed along each axis, then points outside the sphere are
+        removed using a vectorized Euclidean-norm test.
 
         Args:
-            res:
-                The resolution of the grid, defining the spacing between points.
+            res: The grid spacing (Å).
 
         Returns:
-            A numpy array of shape (n, 3), where each row is a [x, y, z]
-            coordinate representing a point within the spherical region.
+            An `(n, 3)` array of interior grid points.
         """
         xs = np.arange(
             self.center[0] - self.radius,
@@ -176,8 +190,9 @@ class SphericalRegion(Region):
         )
 
         result = build_mesh_grid(xs, ys, zs, res)
-        # Remove points outside the sphere
-        distances = cdist(result, self.center.reshape(1, -1)).flatten()
+
+        diff = result - self.center  # broadcasting (N,3) - (3,) -> (N,3)
+        distances = np.sqrt(np.einsum("ij,ij->i", diff, diff))
         inside_sphere = distances < self.radius
         return result[inside_sphere]
 
@@ -302,14 +317,14 @@ def collect_regions(
     regions: list[SphericalRegion | RectangularRegion] = []
 
     if spherical_configs is not None:
-        for config in spherical_configs:  # type: ignore
+        for config in spherical_configs:
             if len(config) == 0:
                 continue
             regions.append(SphericalRegion(config["center"], config["radius"]))  # type: ignore
 
     if rectangular_configs is not None:
-        for config in rectangular_configs:  # type: ignore
+        for config in rectangular_configs:
             if len(config) == 0:
                 continue
-            regions.append(RectangularRegion(config["center"], config["lengths"]))  # type: ignore
+            regions.append(RectangularRegion(config["center"], config["lengths"]))
     return regions
