@@ -30,24 +30,9 @@ By enabling precise volume and flexibility measurements, POVME has become an ess
 -   Supporting virtual screening and druggability predictions.
 -   Comparing conformational ensembles from molecular dynamics simulations.
 
-## Development
-
-We use [pixi](https://pixi.sh/latest/) to manage Python environments and simplify the developer workflow.
-Once you have [pixi](https://pixi.sh/latest/) installed, move into `POVME` directory (e.g., `cd POVME`) and install the  environment using the command
-
-```bash
-pixi install
-```
-
-Now you can activate the new virtual environment using
-
-```sh
-pixi shell -e dev
-```
-
 ## Installation
 
-### Development
+### Latest development version
 
 To install the latest development version of `povme`, follow these steps.
 
@@ -63,15 +48,21 @@ Navigate into the cloned directory.
 cd POVME
 ```
 
-Install the development version using `pip`.
+Install the latest version using `pixi`.
 
 ```bash
-pip install .
+pixi install
 ```
 
-This will install `povme` along with all required dependencies into your current Python environment.
+This will install `povme` along with all required dependencies into a virtual environment.
 
-### Tagged
+To use `povme`, activate the environment and run:
+
+```bash
+pixi shell
+```
+
+### Tagged version
 
 To install a specific version of `povme`, such as `v2.2.2`, follow these steps.
 
@@ -83,13 +74,41 @@ cd POVME
 git checkout v2.2.2
 ```
 
-Install the tagged version using `pip`.
+Ensure your environment includes the required dependencies. If not, please run the following:
 
 ```bash
-pip install .
+conda create -n povme python=3.11 numpy=1.23 scipy=1.10
+conda activate povme
 ```
 
 This will install the specified version of `povme` and its dependencies into your current Python environment.
+
+You can use `povme` as follows:
+
+```bash
+python3 POVME2.py your_input.init
+```
+
+You can also check your installation is valid by running:
+
+```bash
+python3 POVME2.py --test
+```
+
+## Development
+
+We use [pixi](https://pixi.sh/latest/) to manage Python environments and simplify the developer workflow.
+Once you have [pixi](https://pixi.sh/latest/) installed, move into the `POVME` directory (e.g., `cd POVME`) and install the environment using the command:
+
+```bash
+pixi install
+```
+
+Now you can activate the development virtual environment using:
+
+```sh
+pixi shell -e dev
+```
 
 ## Cite
 
