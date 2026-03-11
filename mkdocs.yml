@@ -53,7 +53,6 @@ validation:
 plugins:
   - search
   - autorefs
-  - material-plausible
   - gen-files:
       scripts:
         - docs/gen_ref_pages.py
@@ -84,26 +83,10 @@ plugins:
       timezone: America/Detroit
       fallback_to_build_date: true
   - macros
-  - table-reader
   - glightbox
-  - mkdocs-jupyter:
-        no_input: False
-        include_requirejs: true
-        include_source: True
-        ignore: ["*.py"]
-        remove_tag_config:
-            remove_input_tags:
-                - hide_code
-
-hooks:
-  - hooks/launchy.py
-colab_base_url: https://colab.research.google.com/github/durrantlab/POVME/blob/main/docs
 
 extra:
   generator: true
-  # analytics:
-  #   provider: plausible
-  #   domain: povme
   social:
     - icon: fontawesome/brands/github
       link: https://github.com/durrantlab

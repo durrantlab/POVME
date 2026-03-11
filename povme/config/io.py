@@ -1,6 +1,5 @@
-from typing import Any
-
 from abc import ABC
+from typing import Any
 
 import yaml
 
@@ -15,7 +14,7 @@ class YamlIO(ABC):
             data: Key-value mapping to update attributes with.
         """
         for key, value in data.items():
-            if key in self.model_fields:  # type: ignore
+            if key in self.__class__.model_fields:  # type: ignore
                 setattr(self, key, value)
 
     def from_yaml(self, yaml_paths: str | list[str]) -> None:

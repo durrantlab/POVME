@@ -1,0 +1,6 @@
+public
+.mypy_cache
+.pixi
+.DS_Store
+.ruff_cache
+*.npz
