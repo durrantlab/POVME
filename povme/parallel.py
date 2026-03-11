@@ -71,9 +71,10 @@ the results for further inspection.
 
 """
 
+import os
 from abc import ABC, abstractmethod
-from collections.abc import Callable
-from typing import Any, Generator
+from collections.abc import Callable, Generator
+from typing import Any
 
 import ray
 from loguru import logger
@@ -126,6 +127,10 @@ class RayManager:
         self.n_cores = (
             n_cores if n_cores > 0 else int(ray.available_resources().get("CPU", 1))
         )
+        if not use_ray and n_cores > 1:
+            logger.warning(
+                "n_cores > 1 but use_ray is False. Running tasks sequentially."
+            )
         """
         The number of parallel tasks to run. If set to `-1` or any value less than or
         equal to `0`, all available CPU cores are utilized.
