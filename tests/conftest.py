@@ -34,6 +34,14 @@ def turn_on_logging():
     enable_logging(10)
 
 
+@pytest.fixture(autouse=True)
+def shutdown_ray_after_test():
+    """Ensure Ray is shut down after each test to prevent deadlocks."""
+    yield
+    if HAS_RAY and ray.is_initialized():
+        ray.shutdown()
+
+
 @pytest.fixture
 def path_4nss_config():
     return os.path.join(TEST_DIR, "files/4nss/povme.yml")

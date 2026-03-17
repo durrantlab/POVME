@@ -14,8 +14,9 @@ the end-to-end POVME volume-measurement workflow:
 import os
 import sys
 import time
+from collections.abc import Generator
 from io import StringIO
-from typing import Any, Generator
+from typing import Any
 
 import numpy as np
 from loguru import logger
